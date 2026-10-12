@@ -23,6 +23,15 @@ La documentación técnica completa está en `docs/`. Es la **fuente de verdad**
 
 Si el código que vas a escribir contradice la documentación, **no lo resuelvas por tu cuenta**: avísame y explica la diferencia.
 
+## Decisiones del proyecto
+
+Decisiones tomadas durante el desarrollo que ajustan o precisan la documentación:
+
+- La decisión de pantalla según la sesión se hace con un `redirect` de go_router (Fase 5), no con el widget `AuthGate` de docs/06 §6.7.2. La lógica es la misma: sin sesión → /login; con sesión → desbloqueo → /home.
+- La pantalla de Inicio vive en `features/home/`, no en `features/movements/` como sugiere docs/06.
+- Restaurantes usa #DB2777, color que no estaba en la guía 5.4.1.
+- En `MovementTile`, un movimiento es ingreso si su categoría es `CategoryKind.ingreso`.
+
 ## Stack
 
 - **Flutter (Dart)** para Android e iOS desde un solo código. Se desarrolla en Windows; iOS se compila después en un Mac.
@@ -34,6 +43,8 @@ Si el código que vas a escribir contradice la documentación, **no lo resuelvas
 - **Paquetes del dispositivo** (Fase 6): `camera`, `image_picker`, `google_mlkit_text_recognition`, `flutter_local_notifications`, `flutter_secure_storage`, `local_auth`, `connectivity_plus`.
 
 No agregues dependencias de una fase futura ni paquetes fuera de esta lista sin consultarme.
+
+Identificador de la app: co.mislukas.app
 
 ## Arquitectura
 
@@ -80,6 +91,30 @@ Cada feature tiene `data/`, `domain/` y `presentation/`. Crea `data/` y `domain/
 - Usa las APIs vigentes de Flutter; evita APIs deprecadas.
 - Las pruebas van en `test/` con la misma estructura de `lib/`.
 - Los colores de categoría usan el prefijo `category` (`AppColors.categoryMercado`, `AppColors.categoryIngreso`, etc.) para distinguirlos de los colores de estado (`success`, `error`).
+
+## Componentes disponibles
+
+En `lib/core/widgets/`. Importar siempre desde `package:mislukas/core/widgets/widgets.dart`.
+
+- `AppPrimaryButton`: botón oscuro de ancho completo para la acción principal; estados cargando y deshabilitado.
+- `AppSecondaryButton`: botón con borde de ancho completo, con badge opcional ("Próximamente").
+- `AppBadge`: etiqueta pequeña ("Recomendado", "Próximamente") en tono primary, error o neutral.
+- `AppTextField`: campo con etiqueta en mayúsculas, error, modo contraseña con ojo y `trailing` junto a la etiqueta.
+- `AppAmountField`: campo grande de montos con "$", solo dígitos, puntos de miles y valor como `int`.
+- `AppCard`: tarjeta blanca con borde sutil y `onTap` opcional.
+- `AppSectionHeader`: título de sección con acción opcional a la derecha ("Ver todos").
+- `CategoryIcon`: ícono de categoría (`CategoryKind`) en un cuadrado con fondo pastel.
+- `MovementTile`: fila de movimiento con ícono, "categoría · fecha", monto con signo e indicador de pendiente de sincronizar.
+- `SelectableOptionCard`: tarjeta seleccionable con ícono, descripción, badge e indicador tipo radio.
+- `AppChip` / `AppChipGroup`: chip seleccionable y grupo de selección única.
+- `AppBanner`: franja con ícono, título y descripción en variantes warning, success, error e info.
+- `AppSegmentedTabs`: selector de opciones con la activa en blanco ("Iniciar sesión | Registrarse").
+- `AppEmptyState`: estado vacío con ícono, título, descripción y acción opcional.
+- `AppOfflineIndicator`: aviso discreto de "Sin conexión".
+- `AppSnackbar`: `AppSnackbar.success` / `AppSnackbar.error` para mensajes breves.
+- `AppBottomNav`: barra inferior con Inicio, Reportes, Simular y Perfil.
+
+El estilo de cada categoría (etiqueta, color, fondo pastel, ícono) está en `CategoryKind` (`lib/core/theme/category_style.dart`). En modo debug, la galería `/dev/components` muestra todos los componentes.
 
 ## Reglas de negocio clave
 
@@ -138,7 +173,7 @@ Detalle completo en `docs/08-seguridad.md`.
 5. **Supabase**: autenticación, RLS, sincronización.
 6. **Funciones del dispositivo**: cámara, OCR, notificaciones, biometría.
 
-**Fase actual: 2**
+**Fase actual: 3**
 
 ## Comandos
 

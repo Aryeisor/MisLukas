@@ -14,6 +14,27 @@ abstract final class AppSpacing {
   static const double minTouchTarget = 48;
 }
 
+/// Tamaños de íconos, contenedores y trazos de los componentes.
+abstract final class AppSizes {
+  // Íconos
+  static const double iconXs = 10;
+  static const double iconSm = 16;
+  static const double iconMd = 20;
+  static const double iconLg = 24;
+  static const double iconXl = 32;
+
+  /// Cuadrado del ícono de categoría y de las tarjetas seleccionables.
+  static const double iconBox = 40;
+
+  /// Círculo del ícono en los estados vacíos.
+  static const double iconBoxLg = 64;
+
+  // Trazos
+  static const double borderWidth = 1;
+  static const double borderWidthSelected = 1.5;
+  static const double progressStroke = 2;
+}
+
 /// Radios de los bordes redondeados (guía de estilo §5.4.4).
 abstract final class AppRadius {
   /// Chips.
