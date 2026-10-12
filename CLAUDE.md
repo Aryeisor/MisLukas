@@ -120,6 +120,12 @@ En `lib/core/widgets/`. Importar siempre desde `package:mislukas/core/widgets/wi
 - `AppOfflineIndicator`: aviso discreto de "Sin conexión".
 - `AppSnackbar`: `AppSnackbar.success` / `AppSnackbar.error` / `AppSnackbar.info` para mensajes breves.
 - `AppBottomNav`: barra inferior con Inicio, Reportes, Simular y Perfil.
+- `AppDonutChart` / `AppChartSegment`: gráfico de dona (CustomPainter) con contenido central y descripción para lectores de pantalla.
+- `AppBarComparisonChart` / `AppBarGroup`: barras verticales agrupadas de dos series (gris y primary) con leyenda; las etiquetas del eje no se enciman.
+- `AppVariationBar`: barra horizontal proporcional (0 a 1) sobre pista gris, para variaciones.
+- `AppLegendItem`: elemento de leyenda con punto o cuadro de color, etiqueta y valor opcional.
+- `AppStatCard`: tarjeta de resultado con etiqueta en mayúsculas, valor, descripción y texto destacado; variante verde `highlighted`.
+- `AppAvatar`: avatar circular con iniciales.
 
 El estilo de cada categoría (etiqueta, color, fondo pastel, ícono) está en `CategoryKind` (`lib/core/theme/category_style.dart`). En modo debug, la galería `/dev/components` muestra todos los componentes.
 

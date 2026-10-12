@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/category_style.dart';
 import '../../utils/validators.dart';
@@ -243,6 +244,81 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
             value: r'$420.000 / mes',
             caption: 'Calculado entre julio y septiembre de 2026',
           ),
+
+          _section('Gráficos'),
+          Center(
+            child: AppDonutChart(
+              segments: [
+                for (final (kind, value) in const [
+                  (CategoryKind.mercado, 38),
+                  (CategoryKind.ocio, 22),
+                  (CategoryKind.transporte, 18),
+                  (CategoryKind.servicios, 13),
+                  (CategoryKind.otros, 9),
+                ])
+                  AppChartSegment(
+                    value: value,
+                    color: kind.color,
+                    label: '${kind.label} $value%',
+                  ),
+              ],
+              center: Text('Total', style: textTheme.bodySmall),
+            ),
+          ),
+          _gap,
+          const AppLegendItem(
+            color: AppColors.categoryMercado,
+            label: 'Mercado',
+            value: '38%',
+            prominent: true,
+          ),
+          _gap,
+          const AppVariationBar(fraction: 0.4, color: AppColors.error),
+          _gap,
+          const AppVariationBar(fraction: 0.25, color: AppColors.success),
+          _gap,
+          const AppBarComparisonChart(
+            secondaryLabel: 'Sin interés',
+            primaryLabel: 'Con interés (7% EA)',
+            groups: [
+              AppBarGroup(
+                label: 'A1',
+                secondary: 5040000,
+                primary: 5199725,
+                semanticLabel: 'Año 1',
+              ),
+              AppBarGroup(
+                label: 'A2',
+                secondary: 10080000,
+                primary: 10763430,
+                semanticLabel: 'Año 2',
+              ),
+              AppBarGroup(
+                label: 'A3',
+                secondary: 15120000,
+                primary: 16716595,
+                semanticLabel: 'Año 3',
+              ),
+            ],
+          ),
+
+          _section('Tarjetas de resultado'),
+          const AppStatCard(
+            label: 'Sin interés',
+            value: r'$15.120.000',
+            description: 'Ahorro simple',
+          ),
+          _gap,
+          const AppStatCard(
+            label: 'Con interés',
+            value: r'$16.716.595',
+            description: '7% EA estimado',
+            highlight: r'+$1.596.595 en intereses',
+            highlighted: true,
+          ),
+
+          _section('Avatar'),
+          const Center(child: AppAvatar(initials: 'CR')),
 
           _section('Botón de ícono'),
           Row(

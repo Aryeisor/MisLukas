@@ -34,6 +34,23 @@ abstract final class DateLabels {
   static String monthYear(DateTime date) =>
       '${_months[date.month - 1]} ${date.year}';
 
+  /// Nombre del mes en minúscula: "septiembre".
+  static String monthName(DateTime date) =>
+      _months[date.month - 1].toLowerCase();
+
+  /// Mes abreviado y año: "Sep 2026".
+  static String shortMonthYear(DateTime date) =>
+      '${_shortMonths[date.month - 1]} ${date.year}';
+
+  /// Rango de meses: "Junio – Agosto 2026", o "Noviembre 2025 – Enero 2026"
+  /// si los años son distintos.
+  static String monthRange(DateTime from, DateTime to) {
+    if (from.year == to.year) {
+      return '${_months[from.month - 1]} – ${monthYear(to)}';
+    }
+    return '${monthYear(from)} – ${monthYear(to)}';
+  }
+
   /// "Hoy", "Ayer" o mes abreviado y día ("Sep 1"), relativo a [today].
   static String relativeDay(DateTime date, DateTime today) {
     final day = DateTime(date.year, date.month, date.day);

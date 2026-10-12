@@ -107,12 +107,54 @@ const List<DemoBudget> demoBudgets = [
   ),
 ];
 
+/// Gastos por categoría que no están en la lista, por mes (clave: día 1 del
+/// mes). Septiembre suma [demoUnlistedExpenses] y su Mercado coincide con el
+/// presupuesto; junto con los movimientos listados da los totales de Reportes:
+/// Mercado 897.000, Transporte 427.600, Ocio 522.650, Servicios 308.840 y
+/// Otros 219.590. Agosto no tiene movimientos listados.
+final Map<DateTime, Map<CategoryKind, int>> demoUnlistedExpensesByMonth = {
+  DateTime(2026, 9): const {
+    CategoryKind.mercado: 809600,
+    CategoryKind.transporte: 422000,
+    CategoryKind.ocio: 504150,
+    CategoryKind.servicios: 308840,
+    CategoryKind.otros: 219590,
+  },
+  DateTime(2026, 8): const {
+    CategoryKind.mercado: 801000,
+    CategoryKind.transporte: 464800,
+    CategoryKind.ocio: 399000,
+    CategoryKind.servicios: 321700,
+    CategoryKind.otros: 209100,
+  },
+};
+
+/// Ahorro promedio de los últimos 3 meses completos (junio a agosto de 2026).
+/// En la Fase 4 se calcula con los movimientos guardados.
+const int demoAverageMonthlySavings = 420000;
+
+/// Nombre completo y correo de la usuaria de la demo.
+const String demoUserFullName = 'Camila Rodríguez';
+const String demoUserEmail = 'camila@correo.com';
+
 /// "Hoy" en la demo. Se puede sobrescribir en pruebas.
 final demoTodayProvider = Provider<DateTime>((ref) => demoReferenceDate);
 
 /// Movimientos con los que arranca la demo. Se puede sobrescribir en pruebas.
 final demoSeedMovementsProvider = Provider<List<DemoMovement>>(
   (ref) => demoInitialMovements,
+);
+
+/// Gastos no listados por mes. Se puede sobrescribir en pruebas.
+final demoUnlistedExpensesByMonthProvider =
+    Provider<Map<DateTime, Map<CategoryKind, int>>>(
+      (ref) => demoUnlistedExpensesByMonth,
+    );
+
+/// Ahorro promedio mensual; null si no hay datos suficientes para calcularlo.
+/// Se puede sobrescribir en pruebas.
+final demoAverageSavingsProvider = Provider<int?>(
+  (ref) => demoAverageMonthlySavings,
 );
 
 /// Lista de movimientos en memoria, del más reciente al más antiguo.

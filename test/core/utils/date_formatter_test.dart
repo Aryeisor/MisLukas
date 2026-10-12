@@ -9,6 +9,23 @@ void main() {
     expect(DateLabels.monthYear(DateTime(2026, 1, 5)), 'Enero 2026');
   });
 
+  test('monthName y shortMonthYear', () {
+    expect(DateLabels.monthName(today), 'septiembre');
+    expect(DateLabels.shortMonthYear(today), 'Sep 2026');
+    expect(DateLabels.shortMonthYear(DateTime(2026, 8)), 'Ago 2026');
+  });
+
+  test('monthRange con el mismo año y con años distintos', () {
+    expect(
+      DateLabels.monthRange(DateTime(2026, 6), DateTime(2026, 8)),
+      'Junio – Agosto 2026',
+    );
+    expect(
+      DateLabels.monthRange(DateTime(2025, 11), DateTime(2026, 1)),
+      'Noviembre 2025 – Enero 2026',
+    );
+  });
+
   group('relativeDay', () {
     test('hoy y ayer', () {
       expect(DateLabels.relativeDay(DateTime(2026, 9, 22, 18), today), 'Hoy');

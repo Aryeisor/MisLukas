@@ -129,6 +129,14 @@ abstract final class AppTheme {
           ),
         ),
       ),
+      // Pista activa azul e inactiva gris, como el horizonte del simulador.
+      sliderTheme: const SliderThemeData(
+        activeTrackColor: AppColors.primary,
+        inactiveTrackColor: AppColors.border,
+        thumbColor: AppColors.primary,
+        activeTickMarkColor: Colors.transparent,
+        inactiveTickMarkColor: Colors.transparent,
+      ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         elevation: 0,

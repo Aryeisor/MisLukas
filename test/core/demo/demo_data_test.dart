@@ -18,6 +18,17 @@ void main() {
     ]);
   });
 
+  test('los gastos no listados de septiembre cuadran con Inicio', () {
+    final september = demoUnlistedExpensesByMonth[DateTime(2026, 9)]!;
+    final total = september.values.fold<int>(0, (sum, v) => sum + v);
+    expect(total, demoUnlistedExpenses);
+
+    final mercadoBudget = demoBudgets.firstWhere(
+      (b) => b.category == CategoryKind.mercado,
+    );
+    expect(september[CategoryKind.mercado], mercadoBudget.unlistedSpent);
+  });
+
   test('addExpense agrega el gasto al inicio con fecha de hoy', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);

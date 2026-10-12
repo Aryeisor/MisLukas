@@ -36,6 +36,25 @@ abstract final class AppSizes {
   /// Alto de las barras de progreso (fortaleza de contraseña).
   static const double progressBarHeight = 4;
 
+  /// Avatar con iniciales del perfil.
+  static const double avatar = 72;
+
+  // Gráficos
+  /// Diámetro de la dona de Reportes.
+  static const double donutSize = 120;
+
+  /// Grosor del anillo de la dona.
+  static const double donutStroke = 22;
+
+  /// Alto del área de barras del gráfico año a año.
+  static const double chartHeight = 140;
+
+  /// Alto de la barra de variación mensual.
+  static const double variationBarHeight = 8;
+
+  /// Punto o cuadro de color de las leyendas.
+  static const double legendDot = 10;
+
   // Trazos
   static const double borderWidth = 1;
   static const double borderWidthSelected = 1.5;
