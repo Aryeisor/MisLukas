@@ -12,6 +12,9 @@ abstract final class AppColors {
   static const Color surface = Color(0xFFFFFFFF);
   static const Color border = Color(0xFFE5E7EB);
   static const Color disabled = Color(0xFFD1D5DB);
+  // Gris claro para contenedores secundarios: selector de pestañas,
+  // cajas de ícono sin seleccionar e indicador sin conexión.
+  static const Color surfaceMuted = Color(0xFFF1F5F9);
 
   // Texto
   static const Color textPrimary = Color(0xFF111827);
@@ -20,8 +23,12 @@ abstract final class AppColors {
   // Estados
   static const Color success = Color(0xFF16A34A);
   static const Color successLight = Color(0xFFDCFCE7);
+  static const Color successBorder = Color(0xFFBBF7D0);
   static const Color error = Color(0xFFDC2626);
   static const Color errorLight = Color(0xFFFEE2E2);
+  static const Color errorBorder = Color(0xFFFECACA);
+  // Borde del banner informativo (fondo primaryLight, texto primary).
+  static const Color infoBorder = Color(0xFFBFDBFE);
   static const Color warningBackground = Color(0xFFFEF9C3);
   static const Color warningBorder = Color(0xFFFDE68A);
   static const Color warningText = Color(0xFF854D0E);

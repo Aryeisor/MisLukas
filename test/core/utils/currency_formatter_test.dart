@@ -20,6 +20,27 @@ void main() {
     });
   });
 
+  group('CurrencyFormatter.formatDigits', () {
+    test('formatea sin signo de pesos', () {
+      expect(CurrencyFormatter.formatDigits(87400), '87.400');
+    });
+
+    test('no agrega separador a valores menores que mil', () {
+      expect(CurrencyFormatter.formatDigits(500), '500');
+    });
+  });
+
+  group('CurrencyFormatter.parse', () {
+    test('convierte texto formateado en int', () {
+      expect(CurrencyFormatter.parse('\$1.874.320'), 1874320);
+    });
+
+    test('devuelve null sin dígitos', () {
+      expect(CurrencyFormatter.parse(''), isNull);
+      expect(CurrencyFormatter.parse('\$'), isNull);
+    });
+  });
+
   group('CurrencyFormatter.signed', () {
     test('antepone - a los gastos', () {
       expect(CurrencyFormatter.signed(87400, isIncome: false), '-\$87.400');

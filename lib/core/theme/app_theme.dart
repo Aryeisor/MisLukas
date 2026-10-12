@@ -44,11 +44,11 @@ abstract final class AppTheme {
         style: OutlinedButton.styleFrom(
           backgroundColor: AppColors.surface,
           foregroundColor: AppColors.textPrimary,
+          disabledBackgroundColor: AppColors.surface,
+          disabledForegroundColor: AppColors.textSecondary,
           side: const BorderSide(color: AppColors.border),
-          minimumSize: const Size(
-            AppSpacing.minTouchTarget,
-            AppSpacing.minTouchTarget,
-          ),
+          // Ancho completo, como en los bocetos. Dentro de un Row necesita Expanded.
+          minimumSize: const Size.fromHeight(AppSpacing.minTouchTarget),
           shape: shape,
           textStyle: const TextStyle(
             fontFamily: _fontFamily,
@@ -73,9 +73,15 @@ abstract final class AppTheme {
         border: _inputBorder(AppColors.border),
         enabledBorder: _inputBorder(AppColors.border),
         disabledBorder: _inputBorder(AppColors.border),
-        focusedBorder: _inputBorder(AppColors.primary, width: 1.5),
+        focusedBorder: _inputBorder(
+          AppColors.primary,
+          width: AppSizes.borderWidthSelected,
+        ),
         errorBorder: _inputBorder(AppColors.error),
-        focusedErrorBorder: _inputBorder(AppColors.error, width: 1.5),
+        focusedErrorBorder: _inputBorder(
+          AppColors.error,
+          width: AppSizes.borderWidthSelected,
+        ),
         errorStyle: const TextStyle(
           fontFamily: _fontFamily,
           fontSize: 12,
@@ -89,6 +95,44 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
           side: const BorderSide(color: AppColors.border),
+        ),
+      ),
+      // Barra inferior blanca, sin indicador; la pestaña activa en azul.
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            size: AppSizes.iconLg,
+            color: states.contains(WidgetState.selected)
+                ? AppColors.primary
+                : AppColors.textSecondary,
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => TextStyle(
+            fontFamily: _fontFamily,
+            fontSize: 12,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w600
+                : FontWeight.w500,
+            color: states.contains(WidgetState.selected)
+                ? AppColors.primary
+                : AppColors.textSecondary,
+          ),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        elevation: 0,
+        shape: shape,
+        contentTextStyle: const TextStyle(
+          fontFamily: _fontFamily,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: AppColors.surface,
         ),
       ),
     );
@@ -138,7 +182,10 @@ abstract final class AppTheme {
     ),
   );
 
-  static OutlineInputBorder _inputBorder(Color color, {double width = 1}) {
+  static OutlineInputBorder _inputBorder(
+    Color color, {
+    double width = AppSizes.borderWidth,
+  }) {
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(AppRadius.md),
       borderSide: BorderSide(color: color, width: width),
