@@ -97,6 +97,11 @@ abstract final class AppTheme {
           side: const BorderSide(color: AppColors.border),
         ),
       ),
+      dividerTheme: const DividerThemeData(
+        color: AppColors.border,
+        thickness: AppSizes.borderWidth,
+        space: AppSpacing.xl,
+      ),
       // Barra inferior blanca, sin indicador; la pestaña activa en azul.
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surface,
@@ -123,6 +128,14 @@ abstract final class AppTheme {
                 : AppColors.textSecondary,
           ),
         ),
+      ),
+      // Pista activa azul e inactiva gris, como el horizonte del simulador.
+      sliderTheme: const SliderThemeData(
+        activeTrackColor: AppColors.primary,
+        inactiveTrackColor: AppColors.border,
+        thumbColor: AppColors.primary,
+        activeTickMarkColor: Colors.transparent,
+        inactiveTickMarkColor: Colors.transparent,
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,

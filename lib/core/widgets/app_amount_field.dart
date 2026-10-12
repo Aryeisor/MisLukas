@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/currency_formatter.dart';
+import 'app_field_label.dart';
 
 /// Campo grande para montos en pesos: solo dígitos, con puntos de miles
 /// mientras se escribe. Entrega el valor como int (null si está vacío).
@@ -53,7 +54,7 @@ class _AppAmountFieldState extends State<AppAmountField> {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (widget.label != null) ...[
-          Text(widget.label!.toUpperCase(), style: textTheme.labelSmall),
+          AppFieldLabel(widget.label!),
           const SizedBox(height: AppSpacing.sm),
         ],
         TextField(

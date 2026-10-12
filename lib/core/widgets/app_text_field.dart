@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
+import 'app_field_label.dart';
 
 /// Campo de texto con la etiqueta en mayúsculas arriba.
 ///
@@ -21,6 +22,9 @@ class AppTextField extends StatefulWidget {
     this.isPassword = false,
     this.trailing,
     this.enabled = true,
+    this.maxLength,
+    this.autofillHints,
+    this.onSubmitted,
   });
 
   final String label;
@@ -34,11 +38,20 @@ class AppTextField extends StatefulWidget {
   final Widget? trailing;
   final bool enabled;
 
+  /// Máximo de caracteres; muestra el contador debajo del campo.
+  final int? maxLength;
+  final Iterable<String>? autofillHints;
+  final ValueChanged<String>? onSubmitted;
+
   @override
   State<AppTextField> createState() => _AppTextFieldState();
 }
 
 class _AppTextFieldState extends State<AppTextField> {
+  // Con trailing, la etiqueta ocupa como máximo esta fracción del ancho,
+  // para que el enlace siempre tenga espacio.
+  static const double _labelMaxFractionWithTrailing = 0.6;
+
   bool _obscured = true;
 
   @override
@@ -50,31 +63,44 @@ class _AppTextFieldState extends State<AppTextField> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // La etiqueta conserva su ancho natural en una sola línea;
-        // el trailing usa el espacio restante y puede partirse en dos líneas.
-        Row(
-          children: [
-            Text(
-              widget.label.toUpperCase(),
-              style: textTheme.labelSmall,
-              maxLines: 1,
-              softWrap: false,
-            ),
-            if (widget.trailing != null) ...[
-              const SizedBox(width: AppSpacing.sm),
-              Flexible(
-                child: Align(
-                  alignment: AlignmentDirectional.centerEnd,
-                  child: widget.trailing,
+        // La etiqueta conserva su ancho natural en una sola línea; solo si no
+        // cabe se reduce (nunca se parte). El trailing usa el espacio restante
+        // y puede pasar a dos líneas.
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final maxLabelWidth = widget.trailing == null
+                ? constraints.maxWidth
+                : constraints.maxWidth * _labelMaxFractionWithTrailing;
+            return Row(
+              children: [
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxLabelWidth),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: AlignmentDirectional.centerStart,
+                    child: AppFieldLabel(widget.label),
+                  ),
                 ),
-              ),
-            ],
-          ],
+                if (widget.trailing != null) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  Flexible(
+                    child: Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: widget.trailing,
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
         ),
         const SizedBox(height: AppSpacing.sm),
         TextField(
           controller: widget.controller,
           onChanged: widget.onChanged,
+          onSubmitted: widget.onSubmitted,
+          maxLength: widget.maxLength,
+          autofillHints: widget.autofillHints,
           enabled: widget.enabled,
           keyboardType: widget.isPassword
               ? TextInputType.visiblePassword

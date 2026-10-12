@@ -13,6 +13,10 @@ abstract final class AppSnackbar {
   static void error(BuildContext context, String message) =>
       _show(context, message, AppColors.error, Icons.error_outline);
 
+  /// Mensaje informativo neutro, por ejemplo "Disponible próximamente".
+  static void info(BuildContext context, String message) =>
+      _show(context, message, AppColors.action, Icons.info_outline);
+
   static void _show(
     BuildContext context,
     String message,

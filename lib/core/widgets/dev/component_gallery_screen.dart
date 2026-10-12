@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/category_style.dart';
+import '../../utils/validators.dart';
 import '../widgets.dart';
 
 /// Galería de componentes para revisar sus estados. Solo se registra en modo debug.
@@ -17,6 +19,7 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
   bool _photoSelected = true;
   CategoryKind _category = CategoryKind.mercado;
   int? _amount = 87400;
+  bool _acceptedTerms = false;
 
   static const _chipCategories = [
     CategoryKind.mercado,
@@ -216,6 +219,166 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
               actionLabel: 'Registrar gasto',
               onAction: () {},
             ),
+          ),
+
+          _section('Tarjeta de resumen'),
+          const AppSummaryCard(
+            label: 'Disponible este mes',
+            value: r'$1.874.320',
+            items: [
+              AppSummaryItem(
+                icon: Icons.arrow_upward,
+                label: 'Ingresos',
+                value: r'$4.250.000',
+              ),
+              AppSummaryItem(
+                icon: Icons.arrow_downward,
+                label: 'Gastos',
+                value: r'$2.375.680',
+              ),
+            ],
+          ),
+          _gap,
+          const AppSummaryCard(
+            label: 'Ahorro promedio',
+            value: r'$420.000 / mes',
+            caption: 'Calculado entre julio y septiembre de 2026',
+          ),
+
+          _section('Gráficos'),
+          Center(
+            child: AppDonutChart(
+              segments: [
+                for (final (kind, value) in const [
+                  (CategoryKind.mercado, 38),
+                  (CategoryKind.ocio, 22),
+                  (CategoryKind.transporte, 18),
+                  (CategoryKind.servicios, 13),
+                  (CategoryKind.otros, 9),
+                ])
+                  AppChartSegment(
+                    value: value,
+                    color: kind.color,
+                    label: '${kind.label} $value%',
+                  ),
+              ],
+              center: Text('Total', style: textTheme.bodySmall),
+            ),
+          ),
+          _gap,
+          const AppLegendItem(
+            color: AppColors.categoryMercado,
+            label: 'Mercado',
+            value: '38%',
+            prominent: true,
+          ),
+          _gap,
+          const AppVariationBar(fraction: 0.4, color: AppColors.error),
+          _gap,
+          const AppVariationBar(fraction: 0.25, color: AppColors.success),
+          _gap,
+          const AppBarComparisonChart(
+            secondaryLabel: 'Sin interés',
+            primaryLabel: 'Con interés (7% EA)',
+            groups: [
+              AppBarGroup(
+                label: 'A1',
+                secondary: 5040000,
+                primary: 5199725,
+                semanticLabel: 'Año 1',
+              ),
+              AppBarGroup(
+                label: 'A2',
+                secondary: 10080000,
+                primary: 10763430,
+                semanticLabel: 'Año 2',
+              ),
+              AppBarGroup(
+                label: 'A3',
+                secondary: 15120000,
+                primary: 16716595,
+                semanticLabel: 'Año 3',
+              ),
+            ],
+          ),
+
+          _section('Tarjetas de resultado'),
+          const AppStatCard(
+            label: 'Sin interés',
+            value: r'$15.120.000',
+            description: 'Ahorro simple',
+          ),
+          _gap,
+          const AppStatCard(
+            label: 'Con interés',
+            value: r'$16.716.595',
+            description: '7% EA estimado',
+            highlight: r'+$1.596.595 en intereses',
+            highlighted: true,
+          ),
+
+          _section('Avatar'),
+          const Center(child: AppAvatar(initials: 'CR')),
+
+          _section('Botón de ícono'),
+          Row(
+            children: [
+              AppIconButton(
+                icon: Icons.notifications_none,
+                tooltip: 'Notificaciones',
+                onPressed: () {},
+              ),
+              const SizedBox(width: AppSpacing.md),
+              AppIconButton(
+                icon: Icons.close,
+                tooltip: 'Cerrar',
+                onPressed: () {},
+              ),
+              const SizedBox(width: AppSpacing.md),
+              AppIconButton(
+                icon: Icons.arrow_back,
+                tooltip: 'Volver',
+                onPressed: () {},
+              ),
+            ],
+          ),
+
+          _section('Contraseña y casilla'),
+          const AppPasswordStrength(
+            strength: PasswordStrength.medium,
+            requirements: [
+              AppRequirement(label: 'Mínimo 8 caracteres', met: true),
+              AppRequirement(label: 'Una mayúscula', met: true),
+              AppRequirement(label: 'Un número', met: true),
+              AppRequirement(label: 'Un símbolo', met: false),
+            ],
+          ),
+          _gap,
+          AppCheckboxTile(
+            value: _acceptedTerms,
+            onChanged: (value) => setState(() => _acceptedTerms = value),
+            segments: [
+              const AppTextSegment('Acepto los '),
+              AppTextSegment('Términos', onTap: () {}),
+              const AppTextSegment(' y la '),
+              AppTextSegment(
+                'Política de tratamiento de datos personales',
+                onTap: () {},
+              ),
+              const AppTextSegment(' (Ley 1581 de 2012)'),
+            ],
+          ),
+
+          _section('Recibo'),
+          const ReceiptPreview(
+            merchant: 'ÉXITO AV. EL DORADO',
+            taxId: '890.900.608-9',
+            lines: [
+              ReceiptLine('Leche larga vida x2', 8900),
+              ReceiptLine('Pan tajado', 4500),
+              ReceiptLine('Huevos x30', 19800),
+            ],
+            total: 33200,
           ),
 
           _section('Snackbar'),

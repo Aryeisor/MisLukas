@@ -29,6 +29,8 @@ abstract final class AppColors {
   static const Color errorBorder = Color(0xFFFECACA);
   // Borde del banner informativo (fondo primaryLight, texto primary).
   static const Color infoBorder = Color(0xFFBFDBFE);
+  // Ámbar para indicadores gráficos de nivel medio (fortaleza de contraseña).
+  static const Color warning = Color(0xFFF59E0B);
   static const Color warningBackground = Color(0xFFFEF9C3);
   static const Color warningBorder = Color(0xFFFDE68A);
   static const Color warningText = Color(0xFF854D0E);
