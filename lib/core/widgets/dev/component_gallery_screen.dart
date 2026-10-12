@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_spacing.dart';
 import '../../theme/category_style.dart';
+import '../../utils/validators.dart';
 import '../widgets.dart';
 
 /// Galería de componentes para revisar sus estados. Solo se registra en modo debug.
@@ -17,6 +18,7 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
   bool _photoSelected = true;
   CategoryKind _category = CategoryKind.mercado;
   int? _amount = 87400;
+  bool _acceptedTerms = false;
 
   static const _chipCategories = [
     CategoryKind.mercado,
@@ -216,6 +218,91 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
               actionLabel: 'Registrar gasto',
               onAction: () {},
             ),
+          ),
+
+          _section('Tarjeta de resumen'),
+          const AppSummaryCard(
+            label: 'Disponible este mes',
+            value: r'$1.874.320',
+            items: [
+              AppSummaryItem(
+                icon: Icons.arrow_upward,
+                label: 'Ingresos',
+                value: r'$4.250.000',
+              ),
+              AppSummaryItem(
+                icon: Icons.arrow_downward,
+                label: 'Gastos',
+                value: r'$2.375.680',
+              ),
+            ],
+          ),
+          _gap,
+          const AppSummaryCard(
+            label: 'Ahorro promedio',
+            value: r'$420.000 / mes',
+            caption: 'Calculado entre julio y septiembre de 2026',
+          ),
+
+          _section('Botón de ícono'),
+          Row(
+            children: [
+              AppIconButton(
+                icon: Icons.notifications_none,
+                tooltip: 'Notificaciones',
+                onPressed: () {},
+              ),
+              const SizedBox(width: AppSpacing.md),
+              AppIconButton(
+                icon: Icons.close,
+                tooltip: 'Cerrar',
+                onPressed: () {},
+              ),
+              const SizedBox(width: AppSpacing.md),
+              AppIconButton(
+                icon: Icons.arrow_back,
+                tooltip: 'Volver',
+                onPressed: () {},
+              ),
+            ],
+          ),
+
+          _section('Contraseña y casilla'),
+          const AppPasswordStrength(
+            strength: PasswordStrength.medium,
+            requirements: [
+              AppRequirement(label: 'Mínimo 8 caracteres', met: true),
+              AppRequirement(label: 'Una mayúscula', met: true),
+              AppRequirement(label: 'Un número', met: true),
+              AppRequirement(label: 'Un símbolo', met: false),
+            ],
+          ),
+          _gap,
+          AppCheckboxTile(
+            value: _acceptedTerms,
+            onChanged: (value) => setState(() => _acceptedTerms = value),
+            segments: [
+              const AppTextSegment('Acepto los '),
+              AppTextSegment('Términos', onTap: () {}),
+              const AppTextSegment(' y la '),
+              AppTextSegment(
+                'Política de tratamiento de datos personales',
+                onTap: () {},
+              ),
+              const AppTextSegment(' (Ley 1581 de 2012)'),
+            ],
+          ),
+
+          _section('Recibo'),
+          const ReceiptPreview(
+            merchant: 'ÉXITO AV. EL DORADO',
+            taxId: '890.900.608-9',
+            lines: [
+              ReceiptLine('Leche larga vida x2', 8900),
+              ReceiptLine('Pan tajado', 4500),
+              ReceiptLine('Huevos x30', 19800),
+            ],
+            total: 33200,
           ),
 
           _section('Snackbar'),

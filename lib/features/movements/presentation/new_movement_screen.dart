@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/app_routes.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/widgets.dart';
 import 'movement_entry_method.dart';
+import 'new_movement_view_model.dart';
 
-/// Pantalla provisional de nuevo gasto. La real se construye en la Fase 3.
-class NewMovementScreen extends StatelessWidget {
+/// Pantalla de Nuevo gasto: elegir el método de registro (pantalla 6, fig. 5.5).
+class NewMovementScreen extends ConsumerWidget {
   const NewMovementScreen({super.key});
-
-  void _open(BuildContext context, MovementEntryMethod method) {
-    context.push(AppRoutes.confirmMovementWith(method.name));
-  }
 
   void _close(BuildContext context) {
     if (context.canPop()) {
@@ -23,43 +21,82 @@ class NewMovementScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(newMovementViewModelProvider);
+    final viewModel = ref.read(newMovementViewModelProvider.notifier);
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(AppSpacing.screenPadding),
                 children: [
-                  Expanded(
-                    child: Text(
-                      'Nuevo gasto',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Semantics(
+                              header: true,
+                              child: Text(
+                                'Nuevo gasto',
+                                style: textTheme.headlineSmall,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              '¿Cómo quieres registrarlo?',
+                              style: textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      AppIconButton(
+                        icon: Icons.close,
+                        tooltip: 'Cerrar',
+                        onPressed: () => _close(context),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    tooltip: 'Cerrar',
-                    icon: const Icon(Icons.close),
-                    onPressed: () => _close(context),
+                  const SizedBox(height: AppSpacing.xl),
+                  SelectableOptionCard(
+                    icon: Icons.photo_camera_outlined,
+                    title: MovementEntryMethod.photo.label,
+                    badge: 'Recomendado',
+                    description:
+                        'La app extrae el valor y sugiere la categoría '
+                        'automáticamente.',
+                    selected: selected == MovementEntryMethod.photo,
+                    onTap: () => viewModel.select(MovementEntryMethod.photo),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  SelectableOptionCard(
+                    icon: Icons.edit_outlined,
+                    title: MovementEntryMethod.manual.label,
+                    description:
+                        'Escribe el valor y elige la categoría tú mismo.',
+                    selected: selected == MovementEntryMethod.manual,
+                    onTap: () => viewModel.select(MovementEntryMethod.manual),
                   ),
                 ],
               ),
-              const Spacer(),
-              AppPrimaryButton(
-                label: MovementEntryMethod.photo.label,
-                icon: Icons.photo_camera_outlined,
-                onPressed: () => _open(context, MovementEntryMethod.photo),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.screenPadding),
+              child: AppPrimaryButton(
+                label: 'Continuar',
+                onPressed: () => context.push(
+                  AppRoutes.confirmMovementWith(selected.name),
+                ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              AppSecondaryButton(
-                label: MovementEntryMethod.manual.label,
-                icon: Icons.edit_outlined,
-                onPressed: () => _open(context, MovementEntryMethod.manual),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

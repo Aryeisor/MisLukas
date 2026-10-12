@@ -29,6 +29,13 @@ abstract final class AppSizes {
   /// Círculo del ícono en los estados vacíos.
   static const double iconBoxLg = 64;
 
+  /// Círculos decorativos de la tarjeta de resumen.
+  static const double decorCircleLg = 160;
+  static const double decorCircleSm = 96;
+
+  /// Alto de las barras de progreso (fortaleza de contraseña).
+  static const double progressBarHeight = 4;
+
   // Trazos
   static const double borderWidth = 1;
   static const double borderWidthSelected = 1.5;

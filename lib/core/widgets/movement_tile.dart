@@ -72,11 +72,20 @@ class MovementTile extends StatelessWidget {
               const _PendingSyncIcon(),
               const SizedBox(width: AppSpacing.sm),
             ],
-            Text(
-              CurrencyFormatter.signed(amount, isIncome: _isIncome),
-              style: textTheme.bodyLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: _isIncome ? AppColors.success : AppColors.textPrimary,
+            // En pantallas angostas el monto se reduce en lugar de desbordar.
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerEnd,
+                child: Text(
+                  CurrencyFormatter.signed(amount, isIncome: _isIncome),
+                  style: textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: _isIncome
+                        ? AppColors.success
+                        : AppColors.textPrimary,
+                  ),
+                ),
               ),
             ),
           ],

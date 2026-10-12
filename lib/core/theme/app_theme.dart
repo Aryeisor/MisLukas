@@ -97,6 +97,11 @@ abstract final class AppTheme {
           side: const BorderSide(color: AppColors.border),
         ),
       ),
+      dividerTheme: const DividerThemeData(
+        color: AppColors.border,
+        thickness: AppSizes.borderWidth,
+        space: AppSpacing.xl,
+      ),
       // Barra inferior blanca, sin indicador; la pestaña activa en azul.
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surface,

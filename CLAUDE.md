@@ -31,6 +31,7 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - La pantalla de Inicio vive en `features/home/`, no en `features/movements/` como sugiere docs/06.
 - Restaurantes usa #DB2777, color que no estaba en la guía 5.4.1.
 - En `MovementTile`, un movimiento es ingreso si su categoría es `CategoryKind.ingreso`.
+- La variante manual de Confirma los datos se titula "Registra tu gasto" (como en el diagrama 5.1), su campo es "VALOR DEL GASTO" y la sección "CATEGORÍA" no trae ninguna categoría preseleccionada, a diferencia del boceto 5.7.
 
 ## Stack
 
@@ -99,8 +100,14 @@ En `lib/core/widgets/`. Importar siempre desde `package:mislukas/core/widgets/wi
 - `AppPrimaryButton`: botón oscuro de ancho completo para la acción principal; estados cargando y deshabilitado.
 - `AppSecondaryButton`: botón con borde de ancho completo, con badge opcional ("Próximamente").
 - `AppBadge`: etiqueta pequeña ("Recomendado", "Próximamente") en tono primary, error o neutral.
-- `AppTextField`: campo con etiqueta en mayúsculas, error, modo contraseña con ojo y `trailing` junto a la etiqueta.
+- `AppTextField`: campo con etiqueta en mayúsculas, error, modo contraseña con ojo, `trailing` junto a la etiqueta, `maxLength`, `autofillHints` y `onSubmitted`.
+- `AppFieldLabel`: etiqueta de campo en mayúsculas ("CATEGORÍA SUGERIDA").
 - `AppAmountField`: campo grande de montos con "$", solo dígitos, puntos de miles y valor como `int`.
+- `AppSummaryCard`: tarjeta principal azul con valor destacado y datos secundarios (disponible del mes, ahorro promedio).
+- `AppIconButton`: botón cuadrado de 48 dp con solo ícono y tooltip (notificaciones, cerrar, volver).
+- `AppCheckboxTile`: casilla con texto que puede incluir enlaces (`AppTextSegment`).
+- `AppPasswordStrength`: barra de fortaleza (Débil/Media/Fuerte) y lista de requisitos de contraseña.
+- `ReceiptPreview`: vista previa de un recibo con el total resaltado como "Área detectada".
 - `AppCard`: tarjeta blanca con borde sutil y `onTap` opcional.
 - `AppSectionHeader`: título de sección con acción opcional a la derecha ("Ver todos").
 - `CategoryIcon`: ícono de categoría (`CategoryKind`) en un cuadrado con fondo pastel.
@@ -111,7 +118,7 @@ En `lib/core/widgets/`. Importar siempre desde `package:mislukas/core/widgets/wi
 - `AppSegmentedTabs`: selector de opciones con la activa en blanco ("Iniciar sesión | Registrarse").
 - `AppEmptyState`: estado vacío con ícono, título, descripción y acción opcional.
 - `AppOfflineIndicator`: aviso discreto de "Sin conexión".
-- `AppSnackbar`: `AppSnackbar.success` / `AppSnackbar.error` para mensajes breves.
+- `AppSnackbar`: `AppSnackbar.success` / `AppSnackbar.error` / `AppSnackbar.info` para mensajes breves.
 - `AppBottomNav`: barra inferior con Inicio, Reportes, Simular y Perfil.
 
 El estilo de cada categoría (etiqueta, color, fondo pastel, ícono) está en `CategoryKind` (`lib/core/theme/category_style.dart`). En modo debug, la galería `/dev/components` muestra todos los componentes.
