@@ -14,7 +14,7 @@ Esta sección explica las tecnologías elegidas, cómo se conectan entre sí, c�
 | ----------------------- | ----------------------------- | ---------------------------------------------------------------------------------- |
 | Framework               | Flutter (Dart)                | Construcción de la aplicación para Android e iOS desde un solo código              |
 | Manejo de estado        | Riverpod                      | Conexión entre la interfaz y la lógica, inyección de dependencias                  |
-| Base de datos local     | Drift (SQLite) + SQLCipher    | Almacenamiento cifrado de movimientos, categorías y presupuestos en el dispositivo |
+| Base de datos local     | Drift (SQLite) +  SQLite3MultipleCiphers   | Almacenamiento cifrado de movimientos, categorías y presupuestos en el dispositivo |
 | Backend                 | Supabase                      | Autenticación, base de datos PostgreSQL en la nube y almacenamiento de archivos    |
 | Almacenamiento seguro   | flutter_secure_storage        | Tokens de sesión y clave de cifrado de la base local                               |
 | Reconocimiento de texto | google_mlkit_text_recognition | Lectura de recibos en el propio dispositivo                                        |
@@ -44,11 +44,11 @@ Riverpod ofrece la misma separación entre interfaz y lógica con menos código,
 
 Para un equipo pequeño y un MVP, Riverpod es la opción más equilibrada.
 
-Drift con SQLCipher. La base local guarda la información financiera del usuario, por lo que necesitábamos consultas por fecha y categoría, relaciones entre tablas y cifrado.
+Drift con SQLite3MultipleCiphers. La base local guarda la información financiera del usuario, por lo que necesitábamos consultas por fecha y categoría, relaciones entre tablas y cifrado.
 
 Drift es una capa sobre SQLite que genera código Dart a partir de la definición de las tablas. Las consultas se validan en tiempo de compilación, siempre se ejecutan de forma parametrizada (lo que previene la inyección SQL, RNF-07), incluye un sistema de migraciones para cambiar el esquema sin perder datos y permite observar consultas como flujos. Esto último hace que la pantalla de inicio se actualice automáticamente cuando se guarda un gasto.
 
-SQLCipher cifra todo el archivo de la base de datos, de modo que si alguien extrae el archivo del dispositivo no puede leerlo sin la clave (RNF-04).
+SQLite3MultipleCiphers cifra todo el archivo de la base de datos con una clave de 256 bits, igual que SQLCipher, de modo que si alguien extrae el archivo del dispositivo no puede leerlo sin la clave (RNF-04). Se eligió porque es el mecanismo de cifrado que recomienda actualmente la documentación de Drift: desde la versión 2.32 de Drift reemplaza al paquete sqlcipher_flutter_libs y se activa desde la configuración de _hooks_ del paquete sqlite3.
 
 Se descartaron Hive e Isar, bases de datos no relacionales, porque el modelo de MisLukas es relacional por naturaleza: un movimiento pertenece a una categoría, un presupuesto a una categoría y a un mes. Además, los reportes requieren agregaciones que SQL resuelve de forma directa.
 
@@ -102,7 +102,7 @@ flowchart LR
         UC["Casos de uso (lógica de negocio)"]
         REPO["Repositorios"]
         SYNC["Servicio de sincronización"]
-        DB[("SQLite + SQLCipher - base local cifrada")]
+        DB[("SQLite + SQLite3MultipleCiphers - base local cifrada")]
         SEC[("Keystore / Keychain - tokens y clave de cifrado")]
         OCR["ML Kit - OCR en el dispositivo"]
         NOTIF["Notificaciones locales"]
@@ -293,6 +293,7 @@ erDiagram
         text tipo "gasto | ingreso"
         text icono
         text color
+        timestamptz creado_en
         timestamptz actualizado_en
         timestamptz eliminado_en
     }
@@ -317,6 +318,7 @@ erDiagram
         uuid categoria_id FK
         date mes "primer día del mes"
         bigint monto_limite
+        timestamptz creado_en
         timestamptz actualizado_en
         timestamptz eliminado_en
     }
@@ -327,6 +329,7 @@ erDiagram
         text ruta_storage "NULL si no se respalda"
         bigint total_detectado
         text comercio_detectado
+        timestamptz creado_en
         timestamptz actualizado_en
         timestamptz eliminado_en
     }
@@ -355,7 +358,7 @@ Ambos esquemas comparten las mismas tablas y campos de negocio, pero cumplen fun
 | Campos de sincronización | estado_sync en cada registro: sincronizado, pendiente o error          | sincronizado_en: momento en que el servidor recibió el cambio, asignado por un _trigger_ |
 | Tablas adicionales       | cola_sincronizacion y metadatos_sync (última sincronización por tabla) | Ninguna adicional en el MVP                                                              |
 | Recibos                  | ruta_local: ubicación de la imagen en el celular                       | ruta_storage: ubicación en Supabase Storage, solo si el usuario activa el respaldo       |
-| Seguridad                | Archivo cifrado completo con SQLCipher                                 | Row Level Security en todas las tablas y cifrado gestionado por Supabase                 |
+| Seguridad                | Archivo cifrado completo con SQLite3MultipleCiphers                    | Row Level Security en todas las tablas y cifrado gestionado por Supabase                 |
 | Tipos de datos           | UUID y fechas se guardan como texto; montos como INTEGER               | Tipos nativos uuid, date, timestamptz, bigint                                            |
 | Migraciones              | Gestionadas por Drift al actualizar la app                             | Scripts SQL versionados en supabase/migrations                                           |
 
@@ -373,7 +376,7 @@ MisLukas guarda información en cuatro lugares distintos, cada uno elegido segú
 | Tokens de sesión y clave de cifrado                     | Keystore (Android) / Keychain (iOS)                                 | Son credenciales; requieren la máxima protección que ofrece el sistema operativo     |
 | Preferencias no sensibles (tema, última pestaña)        | Almacenamiento clave-valor                                          | Datos simples sin valor para un atacante                                             |
 
-**SQLite local como base de trabajo diaria.** Es la única fuente que consulta la interfaz. Esto garantiza que la experiencia sea la misma con o sin conexión y que las pantallas respondan en milisegundos. El archivo está cifrado con SQLCipher mediante una clave aleatoria de 256 bits que se genera la primera vez que el usuario inicia sesión en ese dispositivo y se guarda en el almacenamiento seguro. Al cerrar sesión o eliminar la cuenta, se borran el archivo y la clave (RF-13).
+**SQLite local como base de trabajo diaria.** Es la única fuente que consulta la interfaz. Esto garantiza que la experiencia sea la misma con o sin conexión y que las pantallas respondan en milisegundos. El archivo está cifrado con SQLite3MultipleCiphers mediante una clave aleatoria de 256 bits que se genera la primera vez que el usuario inicia sesión en ese dispositivo y se guarda en el almacenamiento seguro. Al cerrar sesión o eliminar la cuenta, se borran el archivo y la clave (RF-13).
 
 **PostgreSQL en Supabase como respaldo y sincronización.** Contiene una copia de los datos de cada usuario, protegida por Row Level Security. Es lo que permite que Camila recupere toda su información al cambiar de celular (escenario 6 de la sección 3.3) y que en el futuro pueda usar la aplicación en más de un dispositivo.
 

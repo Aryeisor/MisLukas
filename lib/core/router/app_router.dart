@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/movements/presentation/confirm_movement_screen.dart';
+import '../../features/movements/presentation/confirm_movement_view_model.dart';
 import '../../features/movements/presentation/movement_entry_method.dart';
 import '../../features/movements/presentation/new_movement_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
@@ -72,9 +73,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.confirmMovement,
         builder: (context, state) => ConfirmMovementScreen(
-          method: MovementEntryMethod.fromName(
-            state.uri.queryParameters[AppRoutes.methodParam],
+          mode: CreateMovementMode(
+            MovementEntryMethod.fromName(
+              state.uri.queryParameters[AppRoutes.methodParam],
+            ),
           ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.editMovement,
+        builder: (context, state) => ConfirmMovementScreen(
+          mode: EditMovementMode(state.pathParameters[AppRoutes.idParam]!),
         ),
       ),
       if (kDebugMode)

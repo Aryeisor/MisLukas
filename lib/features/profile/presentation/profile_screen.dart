@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/database/seed/demo_seed.dart';
 import '../../../core/router/app_routes.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/dev/demo_data_actions.dart';
 import '../../../core/widgets/widgets.dart';
 import 'profile_view_model.dart';
 
@@ -63,6 +65,11 @@ class ProfileScreen extends ConsumerWidget {
               icon: Icons.logout,
               onPressed: () => context.go(AppRoutes.login),
             ),
+            // Solo en modo desarrollo; en publicación no ocupa espacio.
+            if (ref.watch(demoToolsEnabledProvider)) ...[
+              const SizedBox(height: AppSpacing.xl),
+              const DemoDataActions(),
+            ],
           ],
         ),
       ),

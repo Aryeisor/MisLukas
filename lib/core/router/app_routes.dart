@@ -12,6 +12,16 @@ abstract final class AppRoutes {
   static const String newMovement = '/movements/new';
   static const String confirmMovement = '/movements/confirm';
 
+  /// Edición de un movimiento existente (RF-23), a pantalla completa.
+  static const String editMovement = '/movements/:$idParam/edit';
+
+  /// Parámetro de [editMovement] con el identificador del movimiento.
+  static const String idParam = 'id';
+
+  /// Ruta de edición del movimiento [id].
+  static String editMovementWith(String id) =>
+      '/movements/${Uri.encodeComponent(id)}/edit';
+
   /// Parámetro de [confirmMovement] con el método de registro: photo o manual.
   static const String methodParam = 'method';
 

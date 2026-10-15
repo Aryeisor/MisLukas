@@ -1,34 +1,37 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mislukas/core/demo/demo_data.dart';
+import 'package:mislukas/core/theme/category_mapping.dart';
 import 'package:mislukas/core/theme/category_style.dart';
+import 'package:mislukas/features/budgets/domain/entities/budget_alert.dart'
+    as domain;
+import 'package:mislukas/features/budgets/domain/entities/default_categories.dart';
 import 'package:mislukas/features/home/presentation/home_state.dart';
 import 'package:mislukas/features/home/presentation/home_view_model.dart';
+import 'package:mislukas/features/movements/data/movements_providers.dart';
+import 'package:mislukas/features/movements/domain/entities/month_summary.dart';
+import 'package:mislukas/features/movements/domain/entities/movement.dart';
+
+import '../../../helpers/domain_fixtures.dart';
+import '../../../helpers/test_container.dart';
 
 void main() {
-  final today = DateTime(2026, 9, 22);
+  Future<HomeData> readData(
+    ProviderContainer container, [
+    bool Function(HomeData data)? ready,
+  ]) async {
+    final state = await waitForState(
+      container,
+      homeViewModelProvider,
+      (s) => s is HomeData && (ready?.call(s) ?? true),
+    );
+    return state as HomeData;
+  }
 
-  DemoMovement expense(int amount, {CategoryKind? category, DateTime? date}) =>
-      DemoMovement(
-        id: 'test-$amount',
-        title: 'Gasto',
-        category: category ?? CategoryKind.mercado,
-        date: date ?? today,
-        amount: amount,
-      );
+  group('HomeViewModel con la base sembrada', () {
+    test('calcula ingresos, gastos y disponible del mes', () async {
+      final (container, _) = await createTestContainer();
+      final data = await readData(container);
 
-  group('HomeViewModel con los datos de la demo', () {
-    late ProviderContainer container;
-
-    setUp(() {
-      container = ProviderContainer();
-      addTearDown(container.dispose);
-    });
-
-    HomeData read() => container.read(homeViewModelProvider) as HomeData;
-
-    test('calcula ingresos, gastos y disponible del mes', () {
-      final data = read();
       expect(data.monthLabel, 'Septiembre 2026');
       expect(data.userName, 'Camila');
       expect(data.income, 4250000);
@@ -36,35 +39,57 @@ void main() {
       expect(data.available, 1874320);
     });
 
-    test('muestra la alerta de Mercado al 78% con 253.000 restantes', () {
-      final alert = read().budgetAlert!;
+    test('muestra la alerta de Mercado al 78% con 253.000 restantes', () async {
+      final (container, _) = await createTestContainer();
+      final alert = (await readData(container)).budgetAlert!;
+
       expect(alert.category, CategoryKind.mercado);
       expect(alert.percent, 78);
       expect(alert.remaining, 253000);
     });
 
-    test('lista los movimientos con su fecha relativa', () {
-      final items = read().latestMovements;
-      expect(items.map((m) => m.title).first, 'Éxito');
+    test('lista los 5 últimos movimientos con su fecha relativa', () async {
+      final (container, _) = await createTestContainer();
+      final items = (await readData(container)).latestMovements;
+
+      expect(items.map((m) => m.title), [
+        'Éxito',
+        'TransMilenio',
+        'Uber',
+        'Bar El Chorro',
+        'D1',
+      ]);
       expect(items.map((m) => m.dateLabel), [
         'Hoy',
         'Ayer',
-        'Sep 1',
-        'Sep 1',
-        'Sep 1',
+        'Sep 20',
+        'Sep 19',
+        'Sep 18',
       ]);
     });
 
-    test('agregar un gasto de Mercado actualiza totales, presupuesto y lista', () {
-      container
-          .read(demoMovementsProvider.notifier)
-          .addExpense(
-            title: 'Carulla',
-            category: CategoryKind.mercado,
+    test('registrar un gasto de Mercado actualiza totales, alerta y lista', () async {
+      final (container, _) = await createTestContainer();
+      container.listen(homeViewModelProvider, (_, _) {});
+      await readData(container);
+
+      await container
+          .read(registerMovementProvider)
+          .call(
             amount: 50000,
+            categoryId: DefaultCategory.mercado.id,
+            origin: MovementOrigin.manual,
+            note: 'Carulla',
           );
 
-      final data = read();
+      // Cada stream se actualiza por su cuenta; espera a que lleguen los tres.
+      final data = await readData(
+        container,
+        (d) =>
+            d.expenses != 2375680 &&
+            d.budgetAlert?.percent != 78 &&
+            d.latestMovements.first.title == 'Carulla',
+      );
       expect(data.expenses, 2375680 + 50000);
       expect(data.available, 1874320 - 50000);
       expect(data.income, 4250000);
@@ -73,90 +98,88 @@ void main() {
       expect(data.budgetAlert!.remaining, 203000);
       expect(data.latestMovements.first.title, 'Carulla');
       expect(data.latestMovements.first.dateLabel, 'Hoy');
-      expect(data.latestMovements, hasLength(latestMovementsLimit));
+      expect(data.latestMovements, hasLength(5));
     });
 
-    test('sin movimientos en el mes el estado es vacío', () {
-      final empty = ProviderContainer(
-        overrides: [demoSeedMovementsProvider.overrideWithValue(const [])],
+    test('sin movimientos en el mes el estado es vacío', () async {
+      final (container, _) = await createTestContainer(seed: false);
+      final state = await waitForState(
+        container,
+        homeViewModelProvider,
+        (s) => s is! HomeLoading,
       );
-      addTearDown(empty.dispose);
-
-      expect(empty.read(homeViewModelProvider), isA<HomeEmpty>());
+      expect(state, isA<HomeEmpty>());
     });
   });
 
-  group('calculateMonthTotals', () {
-    test('ignora movimientos de otros meses', () {
-      final totals = calculateMonthTotals(
-        movements: [
-          expense(1000),
-          expense(5000, date: DateTime(2026, 8, 31)),
-          DemoMovement(
-            id: 'in',
-            title: 'Salario',
-            category: CategoryKind.ingreso,
-            date: today,
-            amount: 9000,
+  group('buildHomeState', () {
+    final summary = MonthSummary(
+      month: DateTime(2026, 9),
+      income: 1000,
+      expenses: 400,
+      movementCount: 2,
+    );
+
+    test('el título es la nota o, si no hay, la descripción', () {
+      final state = buildHomeState(
+        summary: summary,
+        recent: [
+          testMovement(description: 'Éxito', note: 'Mercado de la semana'),
+          testMovement(
+            description: 'Salario',
+            category: DefaultCategory.ingreso,
           ),
         ],
-        today: today,
-      );
-      expect(totals.income, 9000);
-      expect(totals.expenses, 1000);
-    });
-  });
+        alerts: const [],
+        today: testToday,
+        userName: 'Camila',
+      ) as HomeData;
 
-  group('selectBudgetAlert', () {
-    const budget = DemoBudget(
-      category: CategoryKind.mercado,
-      limit: 1000,
-      unlistedSpent: 0,
-    );
-
-    BudgetAlert? alertFor(int spent) => selectBudgetAlert(
-      budgets: const [budget],
-      movements: [expense(spent)],
-      today: today,
-    );
-
-    test('aparece al llegar al 75%', () {
-      expect(alertFor(750)?.percent, 75);
+      expect(state.latestMovements.map((m) => m.title), [
+        'Mercado de la semana',
+        'Salario',
+      ]);
+      expect(state.latestMovements.last.category, CategoryKind.ingreso);
+      expect(state.budgetAlert, isNull);
+      expect(state.available, 600);
     });
 
-    test('no aparece por debajo del 75%, ni con 74,9%', () {
-      expect(alertFor(740), isNull);
-      expect(
-        selectBudgetAlert(
-          budgets: const [
-            DemoBudget(
-              category: CategoryKind.mercado,
-              limit: 10000,
-              unlistedSpent: 0,
-            ),
-          ],
-          movements: [expense(7499)],
-          today: today,
+    test('toma la alerta con mayor porcentaje', () {
+      final state = buildHomeState(
+        summary: summary,
+        recent: const [],
+        alerts: [
+          domain.BudgetAlert(
+            categoryId: CategoryKind.ocio.categoryId,
+            month: DateTime(2026, 9),
+            limitAmount: 1000,
+            spent: 1200,
+            percent: 120,
+            threshold: domain.BudgetAlertThreshold.exceeded,
+          ),
+        ],
+        today: testToday,
+        userName: 'Camila',
+      ) as HomeData;
+
+      expect(state.budgetAlert!.category, CategoryKind.ocio);
+      expect(state.budgetAlert!.remaining, -200);
+    });
+
+    test('mes sin movimientos: vacío', () {
+      final state = buildHomeState(
+        summary: MonthSummary(
+          month: DateTime(2026, 9),
+          income: 0,
+          expenses: 0,
+          movementCount: 0,
         ),
-        isNull,
+        recent: [testMovement(date: DateTime(2026, 8, 30))],
+        alerts: const [],
+        today: testToday,
+        userName: 'Camila',
       );
-    });
-
-    test('con más del 100% el restante es negativo', () {
-      final alert = alertFor(1200)!;
-      expect(alert.percent, 120);
-      expect(alert.remaining, -200);
-    });
-
-    test('solo cuenta gastos de la categoría del presupuesto', () {
-      expect(
-        selectBudgetAlert(
-          budgets: const [budget],
-          movements: [expense(900, category: CategoryKind.ocio)],
-          today: today,
-        ),
-        isNull,
-      );
+      expect(state, isA<HomeEmpty>());
     });
   });
 }

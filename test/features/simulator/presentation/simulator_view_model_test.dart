@@ -1,27 +1,65 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mislukas/core/demo/demo_data.dart';
+import 'package:mislukas/features/simulator/presentation/simulator_providers.dart';
 import 'package:mislukas/features/simulator/presentation/simulator_state.dart';
 import 'package:mislukas/features/simulator/presentation/simulator_view_model.dart';
+
+import '../../../helpers/domain_fixtures.dart';
+import '../../../helpers/test_container.dart';
 
 void main() {
   ProviderContainer createContainer({int? average = 420000}) {
     final container = ProviderContainer(
-      overrides: [demoAverageSavingsProvider.overrideWithValue(average)],
+      overrides: [
+        savingsAverageProvider.overrideWithValue(
+          AsyncData(savingsAverageOf(average)),
+        ),
+      ],
     );
     addTearDown(container.dispose);
+    // Mantiene vivo el ViewModel entre lecturas.
+    container.listen(simulatorViewModelProvider, (_, _) {});
     return container;
   }
 
   SimulatorData read(ProviderContainer container) =>
       container.read(simulatorViewModelProvider) as SimulatorData;
 
-  test('periodo: últimos 3 meses completos', () {
-    expect(savingsPeriodLabel(DateTime(2026, 9, 22)), 'Junio – Agosto 2026');
+  test('periodo: los meses que realmente se usaron', () {
     expect(
-      savingsPeriodLabel(DateTime(2026, 2, 10)),
+      savingsPeriodLabel(DateTime(2026, 6), DateTime(2026, 8)),
+      'Junio – Agosto 2026',
+    );
+    expect(
+      savingsPeriodLabel(DateTime(2025, 11), DateTime(2026, 1)),
       'Noviembre 2025 – Enero 2026',
     );
+    expect(
+      savingsPeriodLabel(DateTime(2026, 8), DateTime(2026, 8)),
+      'Agosto 2026',
+    );
+  });
+
+  test('con la base sembrada: 420.000 de junio a agosto', () async {
+    final (container, _) = await createTestContainer();
+    final state = await waitForState(
+      container,
+      simulatorViewModelProvider,
+      (s) => s is! SimulatorLoading,
+    );
+    final data = state as SimulatorData;
+    expect(data.averageSavings, 420000);
+    expect(data.periodLabel, 'Junio – Agosto 2026');
+  });
+
+  test('con la base vacía: sin datos suficientes', () async {
+    final (container, _) = await createTestContainer(seed: false);
+    final state = await waitForState(
+      container,
+      simulatorViewModelProvider,
+      (s) => s is! SimulatorLoading,
+    );
+    expect(state, isA<SimulatorNoData>());
   });
 
   test('estado inicial: 3 años y aporte igual al promedio', () {

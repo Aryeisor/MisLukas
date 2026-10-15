@@ -89,11 +89,11 @@ Las alertas de presupuesto son más útiles si llegan en el momento preciso, aun
 
 Cada aplicación móvil tiene un espacio de almacenamiento privado dentro del dispositivo, aislado de las demás aplicaciones por el propio sistema operativo. MisLukas guarda en ese espacio:
 
-- **La base de datos SQLite**, cifrada con SQLCipher, con los movimientos, categorías, presupuestos, datos de recibos y la cola de sincronización (sección 6.5).
+- **La base de datos SQLite**, cifrada con SQLite3MultipleCiphers, con los movimientos, categorías, presupuestos, datos de recibos y la cola de sincronización (sección 6.5).
 - **Las imágenes de los recibos**, en una carpeta propia de la aplicación.
 - **Las preferencias no sensibles**, como la última pestaña visitada.
 
-**Protección frente a copias de seguridad.** Los sistemas operativos pueden incluir los datos de las aplicaciones en las copias de seguridad automáticas del dispositivo. Para evitar que la base de datos y las imágenes de los recibos terminen en una copia fuera del control de la aplicación, se excluyen de las copias de seguridad del sistema. Esto no implica pérdida de información para el usuario, porque sus datos ya se respaldan en Supabase mediante la sincronización. Aun si el archivo de la base llegara a copiarse, sin la clave de cifrado sería ilegible.
+**Protección frente a copias de seguridad.** Los sistemas operativos pueden incluir los datos de las aplicaciones en las copias de seguridad automáticas del dispositivo. Para evitar que la base de datos y las imágenes de los recibos terminen en una copia fuera del control de la aplicación, se excluyen de las copias de seguridad del sistema. En Android se desactivaron las copias de seguridad automáticas (android:allowBackup="false") y se definieron reglas de extracción de datos que excluyen la información de la aplicación de la copia en la nube y de la transferencia entre dispositivos. En iOS, la exclusión del archivo de la base de datos queda pendiente para cuando la aplicación se compile en macOS. Esto no implica pérdida de información para el usuario, porque sus datos ya se respaldan en Supabase mediante la sincronización. Aun si el archivo de la base llegara a copiarse, sin la clave de cifrado sería ilegible.
 
 **Espacio ocupado.** Los datos estructurados ocupan muy poco espacio: miles de movimientos caben en unos pocos megabytes. Las imágenes son lo que más crece, por eso se comprimen al guardarse. En una versión futura se podrá configurar que las imágenes de recibos con más de cierto tiempo se eliminen del dispositivo, conservando los datos del movimiento.
 

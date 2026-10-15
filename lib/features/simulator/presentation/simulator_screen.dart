@@ -24,6 +24,17 @@ class SimulatorScreen extends ConsumerWidget {
     final state = ref.watch(simulatorViewModelProvider);
 
     final content = switch (state) {
+      SimulatorLoading() => const Center(child: CircularProgressIndicator()),
+      SimulatorError(:final message) => ListView(
+        padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        children: [
+          AppBanner(
+            variant: AppBannerVariant.error,
+            title: 'No pudimos calcular tu ahorro',
+            description: message,
+          ),
+        ],
+      ),
       SimulatorNoData() => const _MessageView(
         icon: Icons.hourglass_empty,
         title: 'Necesitamos al menos un mes de datos para calcular tu ahorro',

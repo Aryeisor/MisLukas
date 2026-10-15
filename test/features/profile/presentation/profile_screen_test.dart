@@ -1,22 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mislukas/core/database/seed/demo_seed.dart';
+import 'package:mislukas/core/database/app_database.dart';
+import 'package:mislukas/core/widgets/dev/demo_data_actions.dart';
 import 'package:mislukas/core/widgets/widgets.dart';
 import 'package:mislukas/features/auth/presentation/login_screen.dart';
 import 'package:mislukas/features/profile/presentation/profile_screen.dart';
 import 'package:mislukas/features/profile/presentation/profile_view_model.dart';
 
 import '../../../helpers/pump_screen.dart';
+import '../../../helpers/test_database.dart';
 
 void main() {
-  Future<void> openProfile(WidgetTester tester) async {
-    await pumpApp(tester);
+  Future<void> openProfile(WidgetTester tester, AppDatabase db) async {
+    await pumpApp(tester, database: db);
     await loginAsDemoUser(tester);
-    await tester.tap(
-      find.descendant(
-        of: find.byType(AppBottomNav),
-        matching: find.text('Perfil'),
-      ),
-    );
-    await tester.pumpAndSettle();
+    await openTab(tester, 'Perfil');
   }
 
   test('initialsOf toma nombre y apellido', () {
@@ -39,8 +37,36 @@ void main() {
     );
   });
 
-  testWidgets('Cerrar sesión vuelve a /login', (tester) async {
-    await openProfile(tester);
+  testWidgets('en modo desarrollo muestra las acciones de demo', (
+    tester,
+  ) async {
+    await pumpScreen(tester, const ProfileScreen());
+
+    expect(find.text('Herramientas de desarrollo'), findsOneWidget);
+    expect(find.text('Cargar datos de demostración'), findsOneWidget);
+    final clear = tester.widget<AppSecondaryButton>(
+      find.widgetWithText(AppSecondaryButton, 'Borrar todos los datos'),
+    );
+    expect(clear.destructive, isTrue);
+  });
+
+  testWidgets('fuera de modo desarrollo no existen las acciones de demo', (
+    tester,
+  ) async {
+    await pumpScreen(
+      tester,
+      const ProfileScreen(),
+      overrides: [demoToolsEnabledProvider.overrideWithValue(false)],
+    );
+
+    expect(find.byType(DemoDataActions), findsNothing);
+    expect(find.text('Cargar datos de demostración'), findsNothing);
+    expect(find.text('Borrar todos los datos'), findsNothing);
+    expect(find.text('Cerrar sesión'), findsOneWidget);
+  });
+
+  testWidgetsWithDatabase('Cerrar sesión vuelve a /login', (tester, db) async {
+    await openProfile(tester, db);
     expect(find.byType(ProfileScreen), findsOneWidget);
 
     await tester.tap(find.text('Cerrar sesión'));
@@ -50,14 +76,15 @@ void main() {
     expect(find.byType(AppBottomNav), findsNothing);
   });
 
-  testWidgets('sin overflow en 320 x 640 con texto al 130%, con la barra', (
-    tester,
-  ) async {
-    useSmallScreen(tester);
-    await openProfile(tester);
+  testWidgetsWithDatabase(
+    'sin overflow en 320 x 640 con texto al 130%, con la barra',
+    (tester, db) async {
+      useSmallScreen(tester);
+      await openProfile(tester, db);
 
-    expect(find.byType(ProfileScreen), findsOneWidget);
-    await expectNoOverflowWhileScrolling(tester);
-    expect(find.text('Cerrar sesión').hitTestable(), findsOneWidget);
-  });
+      expect(find.byType(ProfileScreen), findsOneWidget);
+      await expectNoOverflowWhileScrolling(tester);
+      expect(find.text('Borrar todos los datos').hitTestable(), findsOneWidget);
+    },
+  );
 }

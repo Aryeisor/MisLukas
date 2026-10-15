@@ -37,7 +37,7 @@ La siguiente tabla relaciona cada riesgo del OWASP Mobile Top 10 con los control
 | M7. Protección insuficiente del binario             | Ofuscación del código compilado; detección de root/jailbreak a futuro                       | 8.8.5, 8.11 |
 | M8. Configuración de seguridad incorrecta           | Exclusión de copias de seguridad, entornos separados, revisión de configuración de Supabase | 8.8, 9.4    |
 | M9. Almacenamiento de datos inseguro                | Base local cifrada, Keystore/Keychain, borrado al cerrar sesión                             | 8.8         |
-| M10. Criptografía insuficiente                      | SQLCipher con clave de 256 bits, hash de contraseñas y PIN                                  | 8.2, 8.8    |
+| M10. Criptografía insuficiente                      | SQLite3MultipleCiphers con clave de 256 bits, hash de contraseñas y PIN                     | 8.2, 8.8    |
 
 8.1.2 Activos a proteger
 
@@ -332,7 +332,7 @@ El celular es el lugar donde más tiempo pasan los datos de MisLukas y también 
 
 Como se explicó en 6.5 y 7.5:
 
-- Toda la base de datos local se cifra con SQLCipher usando una clave aleatoria de 256 bits, generada en el dispositivo y guardada en el Keystore o el Keychain.
+- Toda la base de datos local se cifra con SQLite3MultipleCiphers usando una clave aleatoria de 256 bits, generada en el dispositivo y guardada en el Keystore o el Keychain.
 - El archivo y las imágenes de recibos se excluyen de las copias de seguridad del sistema.
 - Si alguien extrae el archivo de la base, obtiene datos ilegibles. Para leerlos necesitaría la clave, y el sistema operativo solo se la entrega a MisLukas.
 

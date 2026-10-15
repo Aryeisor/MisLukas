@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/demo/demo_data.dart';
+import 'provisional_user.dart';
 
 /// Estado inmutable del Perfil provisional.
 class ProfileState {
@@ -20,15 +20,16 @@ class ProfileState {
 final profileViewModelProvider =
     NotifierProvider<ProfileViewModel, ProfileState>(ProfileViewModel.new);
 
-/// ViewModel del Perfil provisional. El perfil completo (cuenta, seguridad,
-/// sincronización y eliminación de cuenta) llega en una próxima versión.
+/// ViewModel del Perfil provisional. Muestra la usuaria provisional hasta la
+/// Fase 5. El perfil completo (cuenta, seguridad, sincronización y
+/// eliminación de cuenta) llega en una próxima versión.
 class ProfileViewModel extends Notifier<ProfileState> {
   @override
   ProfileState build() {
     return ProfileState(
-      fullName: demoUserFullName,
-      email: demoUserEmail,
-      initials: initialsOf(demoUserFullName),
+      fullName: provisionalUserFullName,
+      email: provisionalUserEmail,
+      initials: initialsOf(provisionalUserFullName),
     );
   }
 }
@@ -36,7 +37,10 @@ class ProfileViewModel extends Notifier<ProfileState> {
 /// Iniciales del primer nombre y del primer apellido, en mayúscula:
 /// "Camila Rodríguez" → "CR"; "camila" → "C".
 String initialsOf(String fullName) {
-  final words = fullName.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+  final words = fullName
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((w) => w.isNotEmpty);
   if (words.isEmpty) return '';
   final first = words.first;
   final letters = words.length > 1 ? [first, words.elementAt(1)] : [first];
