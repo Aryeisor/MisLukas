@@ -32,6 +32,10 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - Restaurantes usa #DB2777, color que no estaba en la guía 5.4.1.
 - En `MovementTile`, un movimiento es ingreso si su categoría es `CategoryKind.ingreso`.
 - La variante manual de Confirma los datos se titula "Registra tu gasto" (como en el diagrama 5.1), su campo es "VALOR DEL GASTO" y la sección "CATEGORÍA" no trae ninguna categoría preseleccionada, a diferencia del boceto 5.7.
+- El cifrado de la base local usa SQLite3MultipleCiphers mediante los hooks del paquete `sqlite3` (`hooks > user_defines > sqlite3 > source: sqlite3mc` en pubspec.yaml) en lugar de SQLCipher, según la recomendación actual de Drift.
+- La base local no guarda `usuario_id`: pertenece a un solo usuario y el `usuario_id` se agrega al sincronizar (Fase 5).
+- Las categorías predeterminadas tienen UUID fijos (`DefaultCategory` en `features/budgets/domain/entities/default_categories.dart`), iguales en todos los dispositivos y en el servidor.
+- PRAGMA key es la única sentencia SQL con el valor dentro del texto, porque SQLite no admite parámetros en ese comando; antes se valida que la clave tenga exactamente 64 caracteres hexadecimales.
 
 ## Stack
 
@@ -39,9 +43,10 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - **Riverpod**: manejo de estado e inyección de dependencias.
 - **go_router**: navegación.
 - **intl**: formato de moneda y fechas.
-- **Drift (SQLite) + SQLCipher**: base de datos local cifrada (Fase 4).
+- **Drift (SQLite) + SQLite3MultipleCiphers**: base de datos local cifrada (Fase 4).
+- **uuid**, **path_provider** y **flutter_secure_storage**: ya incorporadas en la Fase 4 (identificadores, ubicación de la base y clave de cifrado).
 - **Supabase**: Auth, PostgreSQL con Row Level Security y Storage (Fase 5).
-- **Paquetes del dispositivo** (Fase 6): `camera`, `image_picker`, `google_mlkit_text_recognition`, `flutter_local_notifications`, `flutter_secure_storage`, `local_auth`, `connectivity_plus`.
+- **Paquetes del dispositivo** (Fase 6): `camera`, `image_picker`, `google_mlkit_text_recognition`, `flutter_local_notifications`, `local_auth`, `connectivity_plus`.
 
 No agregues dependencias de una fase futura ni paquetes fuera de esta lista sin consultarme.
 
@@ -56,6 +61,8 @@ Clean Architecture + MVVM, organizada por funcionalidad (feature-first).
 - **Datos**: implementación de repositorios, fuente local (Drift), fuente remota (Supabase) y servicio de sincronización.
 
 Las dependencias apuntan hacia adentro: presentación → dominio ← datos. La UI nunca habla directamente con la base de datos ni con Supabase.
+
+Base local en `core/database/` (tablas, `AppDatabase`, apertura cifrada); repositorios y sus providers en `features/*/data/`; entidades, interfaces y casos de uso en `features/*/domain/` (providers de los casos de uso de reports y simulator en su `presentation/`).
 
 ```
 lib/
@@ -182,7 +189,7 @@ Detalle completo en `docs/08-seguridad.md`.
 1. **Base del proyecto**: estructura, tema visual, tipografía DM Sans, formato de moneda.
 2. **Componentes y navegación**: widgets reutilizables, go_router, barra inferior.
 3. **Pantallas con datos de prueba**: las 6 pantallas de los bocetos con datos ficticios.
-4. **Dominio y base local**: entidades, casos de uso, Drift + SQLCipher.
+4. **Dominio y base local**: entidades, casos de uso, Drift + SQLite3MultipleCiphers.
 5. **Supabase**: autenticación, RLS, sincronización.
 6. **Funciones del dispositivo**: cámara, OCR, notificaciones, biometría.
 
