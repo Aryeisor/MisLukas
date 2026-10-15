@@ -102,4 +102,17 @@ class GetSavingsAverage {
     );
     return calculateSavingsAverage(months: months, movements: movements);
   }
+
+  /// Igual que [call], pero se actualiza cuando cambian los movimientos de
+  /// esos meses. Solo emite si el resultado cambia.
+  Stream<SavingsAverage> watch() {
+    final months = _clock.lastCompleteMonths(savingsAverageMonths);
+    return _movements
+        .watchBetween(months.first, nextMonthStart(months.last))
+        .map(
+          (movements) =>
+              calculateSavingsAverage(months: months, movements: movements),
+        )
+        .distinct();
+  }
 }

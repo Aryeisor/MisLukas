@@ -36,6 +36,8 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - La base local no guarda `usuario_id`: pertenece a un solo usuario y el `usuario_id` se agrega al sincronizar (Fase 5).
 - Las categorías predeterminadas tienen UUID fijos (`DefaultCategory` en `features/budgets/domain/entities/default_categories.dart`), iguales en todos los dispositivos y en el servidor.
 - PRAGMA key es la única sentencia SQL con el valor dentro del texto, porque SQLite no admite parámetros en ese comando; antes se valida que la clave tenga exactamente 64 caracteres hexadecimales.
+- Los datos de demostración solo existen en modo desarrollo (`kDebugMode`): se cargan y se borran desde la galería y el Perfil con `DemoSeed` (`core/database/seed/demo_seed.dart`), con fechas relativas al reloj. En la versión de publicación la app arranca vacía y esas acciones no existen.
+- Otros se agregó a las categorías seleccionables de un gasto (registro y edición), aunque el boceto 5.7 no la muestra, porque RF-27 la incluye. Al editar un ingreso solo se ofrece Ingreso; el tipo no cambia al editar.
 
 ## Stack
 
@@ -105,7 +107,7 @@ Cada feature tiene `data/`, `domain/` y `presentation/`. Crea `data/` y `domain/
 En `lib/core/widgets/`. Importar siempre desde `package:mislukas/core/widgets/widgets.dart`.
 
 - `AppPrimaryButton`: botón oscuro de ancho completo para la acción principal; estados cargando y deshabilitado.
-- `AppSecondaryButton`: botón con borde de ancho completo, con badge opcional ("Próximamente").
+- `AppSecondaryButton`: botón con borde de ancho completo, con badge opcional ("Próximamente") y variante `destructive` en rojo ("Eliminar movimiento").
 - `AppBadge`: etiqueta pequeña ("Recomendado", "Próximamente") en tono primary, error o neutral.
 - `AppTextField`: campo con etiqueta en mayúsculas, error, modo contraseña con ojo, `trailing` junto a la etiqueta, `maxLength`, `autofillHints` y `onSubmitted`.
 - `AppFieldLabel`: etiqueta de campo en mayúsculas ("CATEGORÍA SUGERIDA").
@@ -126,6 +128,8 @@ En `lib/core/widgets/`. Importar siempre desde `package:mislukas/core/widgets/wi
 - `AppEmptyState`: estado vacío con ícono, título, descripción y acción opcional.
 - `AppOfflineIndicator`: aviso discreto de "Sin conexión".
 - `AppSnackbar`: `AppSnackbar.success` / `AppSnackbar.error` / `AppSnackbar.info` para mensajes breves.
+- `showAppConfirmDialog`: diálogo de confirmación con "Cancelar" y una acción (en rojo con `destructive`); devuelve true si el usuario confirma.
+- `DemoDataActions` (`core/widgets/dev/`): "Cargar datos de demostración" y "Borrar todos los datos"; solo se muestra en modo desarrollo.
 - `AppBottomNav`: barra inferior con Inicio, Reportes, Simular y Perfil.
 - `AppDonutChart` / `AppChartSegment`: gráfico de dona (CustomPainter) con contenido central y descripción para lectores de pantalla.
 - `AppBarComparisonChart` / `AppBarGroup`: barras verticales agrupadas de dos series (gris y primary) con leyenda; las etiquetas del eje no se enciman.

@@ -5,6 +5,7 @@ import '../../../core/utils/utils_providers.dart';
 import '../../budgets/data/budgets_providers.dart';
 import '../domain/repositories/movement_repository.dart';
 import '../domain/usecases/delete_movement.dart';
+import '../domain/usecases/get_movement.dart';
 import '../domain/usecases/register_movement.dart';
 import '../domain/usecases/update_movement.dart';
 import '../domain/usecases/watch_month_summary.dart';
@@ -37,6 +38,10 @@ final deleteMovementProvider = Provider<DeleteMovement>(
     movements: ref.watch(movementRepositoryProvider),
     clock: ref.watch(clockProvider),
   ),
+);
+
+final getMovementProvider = Provider<GetMovement>(
+  (ref) => GetMovement(movements: ref.watch(movementRepositoryProvider)),
 );
 
 final watchRecentMovementsProvider = Provider<WatchRecentMovements>(

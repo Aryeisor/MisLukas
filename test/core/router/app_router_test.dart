@@ -9,6 +9,7 @@ import 'package:mislukas/features/reports/presentation/reports_screen.dart';
 import 'package:mislukas/features/simulator/presentation/simulator_screen.dart';
 
 import '../../helpers/pump_screen.dart';
+import '../../helpers/test_database.dart';
 
 void main() {
   Future<void> tapTab(WidgetTester tester, String label) async {
@@ -21,8 +22,11 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('arranca en /login y desde ahí llega a /home', (tester) async {
-    await pumpApp(tester);
+  testWidgetsWithDatabase('arranca en /login y desde ahí llega a /home', (
+    tester,
+    db,
+  ) async {
+    await pumpApp(tester, database: db);
     expect(find.byType(LoginScreen), findsOneWidget);
     expect(find.byType(AppBottomNav), findsNothing);
 
@@ -31,8 +35,11 @@ void main() {
     expect(find.byType(AppBottomNav), findsOneWidget);
   });
 
-  testWidgets('la barra inferior cambia entre las 4 pestañas', (tester) async {
-    await pumpApp(tester);
+  testWidgetsWithDatabase('la barra inferior cambia entre las 4 pestañas', (
+    tester,
+    db,
+  ) async {
+    await pumpApp(tester, database: db);
     await loginAsDemoUser(tester);
 
     await tapTab(tester, 'Reportes');
@@ -49,8 +56,11 @@ void main() {
     expect(find.byType(HomeScreen), findsOneWidget);
   });
 
-  testWidgets('/movements/new se abre sin barra inferior', (tester) async {
-    await pumpApp(tester);
+  testWidgetsWithDatabase('/movements/new se abre sin barra inferior', (
+    tester,
+    db,
+  ) async {
+    await pumpApp(tester, database: db);
     await loginAsDemoUser(tester);
 
     await tester.tap(find.text('Nuevo gasto'));
@@ -65,19 +75,42 @@ void main() {
     expect(find.byType(AppBottomNav), findsOneWidget);
   });
 
-  testWidgets('Continuar abre la confirmación con el método elegido', (
-    tester,
-  ) async {
-    await pumpApp(tester);
-    await loginAsDemoUser(tester);
+  testWidgetsWithDatabase(
+    'Continuar abre la confirmación con el método elegido',
+    (tester, db) async {
+      await pumpApp(tester, database: db);
+      await loginAsDemoUser(tester);
 
-    await tester.tap(find.text('Nuevo gasto'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Continuar'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Nuevo gasto'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continuar'));
+      await tester.pumpAndSettle();
 
-    expect(find.byType(ConfirmMovementScreen), findsOneWidget);
-    expect(find.text('Confirma los datos'), findsOneWidget);
-    expect(find.byType(AppBottomNav), findsNothing);
-  });
+      expect(find.byType(ConfirmMovementScreen), findsOneWidget);
+      expect(find.text('Confirma los datos'), findsOneWidget);
+      expect(find.byType(AppBottomNav), findsNothing);
+    },
+  );
+
+  testWidgetsWithDatabase(
+    'tocar un movimiento abre su edición sin barra inferior',
+    (tester, db) async {
+      await pumpApp(tester, database: db);
+      await loginAsDemoUser(tester);
+
+      final tile = find.byType(MovementTile).first;
+      await tester.ensureVisible(tile);
+      await tester.pumpAndSettle();
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ConfirmMovementScreen), findsOneWidget);
+      expect(find.text('Editar movimiento'), findsOneWidget);
+      expect(find.byType(AppBottomNav), findsNothing);
+
+      await tester.tap(find.byTooltip('Volver'));
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeScreen), findsOneWidget);
+    },
+  );
 }

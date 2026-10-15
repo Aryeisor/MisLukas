@@ -13,3 +13,9 @@ final getSavingsAverageProvider = Provider<GetSavingsAverage>(
     clock: ref.watch(clockProvider),
   ),
 );
+
+/// Ahorro promedio de los últimos meses completos, actualizado con los
+/// movimientos. Se puede sobrescribir en pruebas.
+final savingsAverageProvider = StreamProvider.autoDispose<SavingsAverage>(
+  (ref) => ref.watch(getSavingsAverageProvider).watch(),
+);

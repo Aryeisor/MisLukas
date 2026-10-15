@@ -2,25 +2,35 @@ import '../domain/savings_calculator.dart';
 
 /// Estado del Simulador de ahorro.
 sealed class SimulatorState {
-  const SimulatorState({required this.periodLabel});
+  const SimulatorState();
+}
 
-  /// Últimos 3 meses completos: "Junio – Agosto 2026".
-  final String periodLabel;
+class SimulatorLoading extends SimulatorState {
+  const SimulatorLoading();
+}
+
+class SimulatorError extends SimulatorState {
+  const SimulatorError(this.message);
+
+  final String message;
 }
 
 /// No hay datos suficientes para calcular el ahorro promedio (RF-39).
 class SimulatorNoData extends SimulatorState {
-  const SimulatorNoData({required super.periodLabel});
+  const SimulatorNoData();
 }
 
 /// El ahorro promedio es cero o negativo: no hay nada que proyectar (RF-39).
 class SimulatorNotSaving extends SimulatorState {
-  const SimulatorNotSaving({required super.periodLabel});
+  const SimulatorNotSaving({required this.periodLabel});
+
+  /// Meses promediados: "Junio – Agosto 2026".
+  final String periodLabel;
 }
 
 class SimulatorData extends SimulatorState {
   const SimulatorData({
-    required super.periodLabel,
+    required this.periodLabel,
     required this.averageSavings,
     required this.years,
     required this.monthlyContribution,
@@ -30,6 +40,9 @@ class SimulatorData extends SimulatorState {
     required this.yearlySeries,
     required this.boostedProjection,
   });
+
+  /// Meses promediados: "Junio – Agosto 2026".
+  final String periodLabel;
 
   /// Ahorro promedio mensual real del usuario.
   final int averageSavings;
@@ -53,5 +66,6 @@ class SimulatorData extends SimulatorState {
   int get boostDifference =>
       boostedProjection.withInterest - projection.withInterest;
 
-  bool get canDecrease => monthlyContribution - contributionStep >= minContribution;
+  bool get canDecrease =>
+      monthlyContribution - contributionStep >= minContribution;
 }

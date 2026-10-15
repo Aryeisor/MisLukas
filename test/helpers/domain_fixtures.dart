@@ -3,6 +3,7 @@ import 'package:mislukas/core/utils/clock.dart';
 import 'package:mislukas/core/utils/id_generator.dart';
 import 'package:mislukas/features/budgets/domain/entities/default_categories.dart';
 import 'package:mislukas/features/movements/domain/entities/movement.dart';
+import 'package:mislukas/features/simulator/domain/get_savings_average.dart';
 
 /// "Hoy" en las pruebas: 22 de septiembre de 2026, como en la demo.
 final DateTime testToday = DateTime(2026, 9, 22, 10, 30);
@@ -46,7 +47,7 @@ Movement testMovement({
   );
 }
 
-// Datos equivalentes a la demo de la Fase 3 (core/demo/demo_data.dart).
+// Datos equivalentes a la demo (core/database/seed/demo_seed.dart).
 
 /// Gastos de septiembre por categoría: total $2.375.680.
 const Map<DefaultCategory, int> phase3SeptemberExpenses = {
@@ -94,3 +95,12 @@ List<Movement> phase3Movements() {
       ),
   ];
 }
+
+/// Ahorro promedio de junio a agosto de 2026 de [amount]; null es "sin datos
+/// suficientes".
+SavingsAverage savingsAverageOf(int? amount) => amount == null
+    ? const SavingsAverageInsufficientData()
+    : SavingsAverageResult(
+        months: [DateTime(2026, 6), DateTime(2026, 7), DateTime(2026, 8)],
+        amount: amount,
+      );

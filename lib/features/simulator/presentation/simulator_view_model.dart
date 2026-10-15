@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/demo/demo_data.dart';
+import '../../../core/errors/error_messages.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../domain/get_savings_average.dart';
 import '../domain/savings_calculator.dart';
+import 'simulator_providers.dart';
 import 'simulator_state.dart';
 
 /// Horizonte de tiempo permitido, en años (RF-40).
@@ -14,32 +16,38 @@ const int simulatorInitialYears = 3;
 const int contributionStep = 50000;
 const int minContribution = 50000;
 
-/// Meses completos que se promedian para el ahorro (RF-38).
-const int averagedMonths = 3;
-
 final simulatorViewModelProvider =
     NotifierProvider<SimulatorViewModel, SimulatorState>(
       SimulatorViewModel.new,
     );
 
-/// ViewModel del Simulador de ahorro. Lee el ahorro promedio de la demo; en la
-/// Fase 4 lo calculará un caso de uso con los movimientos guardados.
+/// ViewModel del Simulador de ahorro. Toma el ahorro promedio de
+/// GetSavingsAverage; el horizonte y el aporte vuelven a sus valores iniciales
+/// solo si el promedio cambia.
 class SimulatorViewModel extends Notifier<SimulatorState> {
   @override
   SimulatorState build() {
-    final periodLabel = savingsPeriodLabel(ref.watch(demoTodayProvider));
-    final average = ref.watch(demoAverageSavingsProvider);
+    final average = ref.watch(savingsAverageProvider);
 
-    if (average == null) return SimulatorNoData(periodLabel: periodLabel);
-    if (average <= 0) return SimulatorNotSaving(periodLabel: periodLabel);
-
-    return buildSimulatorData(
-      periodLabel: periodLabel,
-      averageSavings: average,
-      years: simulatorInitialYears,
-      // El aporte parte del ahorro real y nunca queda por debajo del mínimo.
-      monthlyContribution: average < minContribution ? minContribution : average,
-    );
+    // El error va primero: al reintentar, el valor sigue en error y cargando.
+    if (average.hasError) return const SimulatorError(dataLoadErrorMessage);
+    return switch (average.value) {
+      null => const SimulatorLoading(),
+      SavingsAverageInsufficientData() => const SimulatorNoData(),
+      final SavingsAverageResult result when !result.isSaving =>
+        SimulatorNotSaving(
+          periodLabel: savingsPeriodLabel(result.from, result.to),
+        ),
+      final SavingsAverageResult result => buildSimulatorData(
+        periodLabel: savingsPeriodLabel(result.from, result.to),
+        averageSavings: result.amount,
+        years: simulatorInitialYears,
+        // El aporte parte del ahorro real y nunca queda por debajo del mínimo.
+        monthlyContribution: result.amount < minContribution
+            ? minContribution
+            : result.amount,
+      ),
+    };
   }
 
   /// Cambia el horizonte, limitado de 1 a 10 años.
@@ -83,12 +91,11 @@ class SimulatorViewModel extends Notifier<SimulatorState> {
   }
 }
 
-/// Últimos [averagedMonths] meses completos antes del mes de [today]:
-/// el 22 de septiembre de 2026 da "Junio – Agosto 2026".
-String savingsPeriodLabel(DateTime today) {
-  final last = DateTime(today.year, today.month - 1);
-  final first = DateTime(today.year, today.month - averagedMonths);
-  return DateLabels.monthRange(first, last);
+/// Meses que realmente se promediaron: "Junio – Agosto 2026", o
+/// "Agosto 2026" si fue uno solo.
+String savingsPeriodLabel(DateTime from, DateTime to) {
+  if (DateLabels.isSameMonth(from, to)) return DateLabels.monthYear(from);
+  return DateLabels.monthRange(from, to);
 }
 
 /// Estado con todos los resultados calculados para el horizonte y el aporte.

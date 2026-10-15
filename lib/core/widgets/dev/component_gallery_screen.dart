@@ -5,6 +5,7 @@ import '../../theme/app_spacing.dart';
 import '../../theme/category_style.dart';
 import '../../utils/validators.dart';
 import '../widgets.dart';
+import 'demo_data_actions.dart';
 
 /// Galería de componentes para revisar sus estados. Solo se registra en modo debug.
 class ComponentGalleryScreen extends StatefulWidget {
@@ -39,6 +40,9 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
         children: [
           const AppOfflineIndicator(),
+          const SizedBox(height: AppSpacing.xl),
+          // Solo en modo desarrollo, como toda la galería.
+          const DemoDataActions(),
           _section('Botones'),
           AppPrimaryButton(label: 'Iniciar sesión', onPressed: () {}),
           _gap,
@@ -57,6 +61,19 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
           const AppPrimaryButton(label: 'Crear cuenta', onPressed: null),
           _gap,
           AppSecondaryButton(label: 'Usar PIN', onPressed: () {}),
+          _gap,
+          AppSecondaryButton(
+            label: 'Eliminar movimiento',
+            icon: Icons.delete_outline,
+            destructive: true,
+            onPressed: () => showAppConfirmDialog(
+              context,
+              title: '¿Eliminar este movimiento?',
+              message: 'Esta acción no se puede deshacer.',
+              confirmLabel: 'Eliminar',
+              destructive: true,
+            ),
+          ),
           _gap,
           const Row(
             crossAxisAlignment: CrossAxisAlignment.start,

@@ -124,4 +124,40 @@ void main() {
       );
     },
   );
+
+  test(
+    'watch se actualiza con los movimientos y no repite resultados',
+    () async {
+      final repository = FakeMovementRepository([
+        ..._month(8, income: 1000000, expense: 600000),
+      ]);
+      final useCase = GetSavingsAverage(
+        movements: repository,
+        clock: testClock,
+      );
+      final results = <SavingsAverage>[];
+      final subscription = useCase.watch().listen(results.add);
+      addTearDown(subscription.cancel);
+      await pumpEventQueue();
+      expect((results.single as SavingsAverageResult).amount, 400000);
+
+      // Un gasto del mes actual no cambia el promedio: no se emite de nuevo.
+      await repository.add(
+        testMovement(amount: 5000, date: DateTime(2026, 9, 3)),
+      );
+      await pumpEventQueue();
+      expect(results, hasLength(1));
+
+      // Un gasto de julio agrega ese mes al promedio.
+      await repository.add(
+        testMovement(amount: 200000, date: DateTime(2026, 7, 9)),
+      );
+      await pumpEventQueue();
+      expect(results, hasLength(2));
+      final last = results.last as SavingsAverageResult;
+      expect(last.amount, (400000 - 200000) ~/ 2);
+      expect(last.from, DateTime(2026, 7));
+      expect(last.to, DateTime(2026, 8));
+    },
+  );
 }

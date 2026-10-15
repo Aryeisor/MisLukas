@@ -128,6 +128,7 @@ class _HomeDataView extends StatelessWidget {
             category: movement.category,
             dateLabel: movement.dateLabel,
             amount: movement.amount,
+            onTap: () => context.push(AppRoutes.editMovementWith(movement.id)),
           ),
           const SizedBox(height: AppSpacing.sm),
         ],
