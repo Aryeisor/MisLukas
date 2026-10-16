@@ -64,7 +64,13 @@ class Movements extends Table with SyncedColumns {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+/// Un presupuesto activo por categoría y mes. Los eliminados (borrado lógico)
+/// no cuentan, para poder crear otro después.
 @DataClassName('BudgetRow')
+@TableIndex.sql(
+  'CREATE UNIQUE INDEX idx_presupuestos_categoria_mes_activo '
+  'ON presupuestos (categoria_id, mes) WHERE eliminado_en IS NULL',
+)
 class Budgets extends Table with SyncedColumns {
   @override
   String get tableName => 'presupuestos';
@@ -80,25 +86,26 @@ class Budgets extends Table with SyncedColumns {
 
   @override
   Set<Column<Object>> get primaryKey => {id};
-
-  /// Un presupuesto por categoría y mes.
-  @override
-  List<Set<Column<Object>>> get uniqueKeys => [
-    {categoryId, month},
-  ];
 }
 
+/// Un recibo activo por movimiento; los eliminados no cuentan.
 @DataClassName('ReceiptRow')
+@TableIndex.sql(
+  'CREATE UNIQUE INDEX idx_recibos_movimiento_activo '
+  'ON recibos (movimiento_id) WHERE eliminado_en IS NULL',
+)
 class Receipts extends Table with SyncedColumns {
   @override
   String get tableName => 'recibos';
 
   TextColumn get id => text()();
 
-  /// Un recibo por movimiento.
   TextColumn get movementId =>
-      text().named('movimiento_id').unique().references(Movements, #id)();
-  TextColumn get localPath => text().named('ruta_local')();
+      text().named('movimiento_id').references(Movements, #id)();
+
+  /// Imagen en el almacenamiento interno de la app. Null si el recibo llegó
+  /// del servidor y la imagen no está en este dispositivo.
+  TextColumn get localPath => text().named('ruta_local').nullable()();
   IntColumn get detectedTotal =>
       integer().named('total_detectado').nullable()();
   TextColumn get detectedMerchant =>

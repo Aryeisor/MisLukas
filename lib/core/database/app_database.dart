@@ -21,14 +21,27 @@ final DateTime defaultCategoriesCreatedAt = DateTime.utc(2026, 1, 1);
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
+  /// v2 (Fase 5B): recibos.ruta_local admite null, y la unicidad de
+  /// presupuestos (categoría y mes) y recibos (movimiento) solo aplica a los
+  /// registros no eliminados.
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
       await _insertDefaultCategories();
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        // Recrea las tablas con el esquema actual conservando sus filas: así se
+        // quitan las restricciones UNIQUE totales y el NOT NULL de ruta_local.
+        await m.alterTable(TableMigration(budgets));
+        await m.alterTable(TableMigration(receipts));
+        await m.createIndex(idxPresupuestosCategoriaMesActivo);
+        await m.createIndex(idxRecibosMovimientoActivo);
+      }
     },
     beforeOpen: (details) async {
       // SQLite trae las llaves foráneas desactivadas por defecto.

@@ -283,6 +283,8 @@ erDiagram
     PERFILES {
         uuid id PK "FK a auth.users"
         text nombre
+        text politica_version "política aceptada al registrarse"
+        timestamptz politica_aceptada_en
         timestamptz creado_en
         timestamptz actualizado_en
     }
@@ -296,6 +298,7 @@ erDiagram
         timestamptz creado_en
         timestamptz actualizado_en
         timestamptz eliminado_en
+        timestamptz sincronizado_en
     }
     MOVIMIENTOS {
         uuid id PK
@@ -311,6 +314,7 @@ erDiagram
         timestamptz creado_en
         timestamptz actualizado_en
         timestamptz eliminado_en
+        timestamptz sincronizado_en
     }
     PRESUPUESTOS {
         uuid id PK
@@ -321,10 +325,11 @@ erDiagram
         timestamptz creado_en
         timestamptz actualizado_en
         timestamptz eliminado_en
+        timestamptz sincronizado_en
     }
     RECIBOS {
         uuid id PK
-        uuid movimiento_id FK "único"
+        uuid movimiento_id FK "único entre los no eliminados"
         uuid usuario_id FK
         text ruta_storage "NULL si no se respalda"
         bigint total_detectado
@@ -332,6 +337,7 @@ erDiagram
         timestamptz creado_en
         timestamptz actualizado_en
         timestamptz eliminado_en
+        timestamptz sincronizado_en
     }
 ```
 
@@ -341,8 +347,15 @@ Figura 6.3. Diagrama entidad-relación del esquema remoto.
 
 - monto y monto_limite deben ser mayores que cero, validado con restricciones CHECK en la base de datos.
 - tipo solo admite los valores "gasto" o "ingreso", y origen solo "foto" o "manual".
-- La combinación de usuario_id, categoria_id y mes es única en presupuestos.
-- Un movimiento tiene como máximo un recibo, por eso movimiento_id es único en recibos.
+- La combinación de usuario_id, categoria_id y mes es única en presupuestos entre los registros no eliminados.
+- Un movimiento tiene como máximo un recibo no eliminado, por eso movimiento_id es único en recibos entre los registros no eliminados.
+- Estas dos reglas usan índices únicos parciales (where eliminado_en is null), igual en SQLite y en PostgreSQL. Como el borrado es lógico, una restricción única total impediría crear otro presupuesto para la misma categoría y mes después de eliminar el anterior.
+- En PostgreSQL ambos índices empiezan por usuario_id: (usuario_id, categoria_id, mes) y (usuario_id, movimiento_id). Así, el intento de asociar un recibo al movimiento de otro usuario lo rechaza la llave foránea y no el índice, y el código de error no revela si ese movimiento existe ni si tiene recibo. En SQLite no hace falta, porque la base local pertenece a un solo usuario.
+- Un recibo solo puede apuntar a un movimiento del mismo usuario: la llave foránea es compuesta, (usuario_id, movimiento_id) hacia (usuario_id, id) de movimientos.
+- La categoría de un movimiento o de un presupuesto debe ser predeterminada o del mismo usuario. Lo comprueba un trigger, porque la llave foránea solo verifica que la categoría exista.
+- Las categorías predeterminadas son filas globales del servidor, con usuario_id nulo y los mismos UUID fijos de la app. Las inserta la migración, todos los usuarios las leen y nadie las modifica. La app nunca las envía: en la base local nacen sincronizadas.
+- La restricción de tipo tiene nombre (movimientos_tipo_check) para poder ampliarla con una migración. Por ejemplo, un futuro "saldo_inicial" se agrega con drop constraint y add constraint, sin recrear la tabla.
+- El perfil se crea con un trigger sobre auth.users al registrarse. Toma nombre y politica_version de los metadatos del registro y rechaza el registro si falta la versión de la política (docs/08 §8.9.1). El usuario puede cambiar su nombre, pero no la versión aceptada.
 
 Estas reglas se aplican en la base de datos además de validarse en la aplicación. La validación en la app mejora la experiencia del usuario; la validación en la base de datos garantiza que ningún dato inválido llegue a guardarse, aunque alguien intente enviarlo directamente a la API.
 
@@ -357,7 +370,8 @@ Ambos esquemas comparten las mismas tablas y campos de negocio, pero cumplen fun
 | Tabla de usuarios        | No guarda credenciales; solo el perfil                                 | auth.users administrada por Supabase Auth, más perfiles                                  |
 | Campos de sincronización | estado_sync en cada registro: sincronizado, pendiente o error          | sincronizado_en: momento en que el servidor recibió el cambio, asignado por un _trigger_ |
 | Tablas adicionales       | cola_sincronizacion y metadatos_sync (última sincronización por tabla) | Ninguna adicional en el MVP                                                              |
-| Recibos                  | ruta_local: ubicación de la imagen en el celular                       | ruta_storage: ubicación en Supabase Storage, solo si el usuario activa el respaldo       |
+| Recibos                  | ruta_local: imagen en el celular; nula si llegó de otro dispositivo    | ruta_storage: ubicación en Supabase Storage, solo si el usuario activa el respaldo       |
+| Propietario              | Sin usuario_id: la base pertenece a un solo usuario                    | usuario_id con valor por defecto auth.uid(); el cliente no lo envía                      |
 | Seguridad                | Archivo cifrado completo con SQLite3MultipleCiphers                    | Row Level Security en todas las tablas y cifrado gestionado por Supabase                 |
 | Tipos de datos           | UUID y fechas se guardan como texto; montos como INTEGER               | Tipos nativos uuid, date, timestamptz, bigint                                            |
 | Migraciones              | Gestionadas por Drift al actualizar la app                             | Scripts SQL versionados en supabase/migrations                                           |
@@ -594,8 +608,10 @@ Future<void> recibirMovimientos(DateTime ultimaSync) async {
 
 La consulta de descarga no filtra por usuario, y no le hace falta: la política de Row Level Security en el servidor garantiza que solo se devuelvan los registros del usuario autenticado.
 
+El siguiente fragmento es una versión simplificada. Los scripts reales están en supabase/migrations (003_movimientos.sql y siguientes): usan políticas separadas para select, insert y update, sin delete (docs/08 §8.5.2), y funciones con search_path fijo.
+
 ```sql
--- supabase/migrations/002_rls_movimientos.sql
+-- supabase/migrations/003_movimientos.sql (simplificado)
 alter table movimientos enable row level security;
 
 create policy "Cada usuario gestiona solo sus movimientos"

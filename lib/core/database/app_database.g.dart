@@ -1506,10 +1506,6 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, BudgetRow> {
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  List<Set<GeneratedColumn>> get uniqueKeys => [
-    {categoryId, month},
-  ];
-  @override
   BudgetRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return BudgetRow(
@@ -1931,7 +1927,7 @@ class $ReceiptsTable extends Receipts
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'UNIQUE REFERENCES movimientos (id)',
+      'REFERENCES movimientos (id)',
     ),
   );
   static const VerificationMeta _localPathMeta = const VerificationMeta(
@@ -1941,9 +1937,9 @@ class $ReceiptsTable extends Receipts
   late final GeneratedColumn<String> localPath = GeneratedColumn<String>(
     'ruta_local',
     aliasedName,
-    false,
+    true,
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _detectedTotalMeta = const VerificationMeta(
     'detectedTotal',
@@ -2043,8 +2039,6 @@ class $ReceiptsTable extends Receipts
         _localPathMeta,
         localPath.isAcceptableOrUnknown(data['ruta_local']!, _localPathMeta),
       );
-    } else if (isInserting) {
-      context.missing(_localPathMeta);
     }
     if (data.containsKey('total_detectado')) {
       context.handle(
@@ -2100,7 +2094,7 @@ class $ReceiptsTable extends Receipts
       localPath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}ruta_local'],
-      )!,
+      ),
       detectedTotal: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}total_detectado'],
@@ -2124,10 +2118,11 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
   final DateTime? deletedAt;
   final String syncStatus;
   final String id;
-
-  /// Un recibo por movimiento.
   final String movementId;
-  final String localPath;
+
+  /// Imagen en el almacenamiento interno de la app. Null si el recibo llegó
+  /// del servidor y la imagen no está en este dispositivo.
+  final String? localPath;
   final int? detectedTotal;
   final String? detectedMerchant;
   const ReceiptRow({
@@ -2137,7 +2132,7 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
     required this.syncStatus,
     required this.id,
     required this.movementId,
-    required this.localPath,
+    this.localPath,
     this.detectedTotal,
     this.detectedMerchant,
   });
@@ -2152,7 +2147,9 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
     map['estado_sync'] = Variable<String>(syncStatus);
     map['id'] = Variable<String>(id);
     map['movimiento_id'] = Variable<String>(movementId);
-    map['ruta_local'] = Variable<String>(localPath);
+    if (!nullToAbsent || localPath != null) {
+      map['ruta_local'] = Variable<String>(localPath);
+    }
     if (!nullToAbsent || detectedTotal != null) {
       map['total_detectado'] = Variable<int>(detectedTotal);
     }
@@ -2172,7 +2169,9 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
       syncStatus: Value(syncStatus),
       id: Value(id),
       movementId: Value(movementId),
-      localPath: Value(localPath),
+      localPath: localPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(localPath),
       detectedTotal: detectedTotal == null && nullToAbsent
           ? const Value.absent()
           : Value(detectedTotal),
@@ -2194,7 +2193,7 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
       syncStatus: serializer.fromJson<String>(json['syncStatus']),
       id: serializer.fromJson<String>(json['id']),
       movementId: serializer.fromJson<String>(json['movementId']),
-      localPath: serializer.fromJson<String>(json['localPath']),
+      localPath: serializer.fromJson<String?>(json['localPath']),
       detectedTotal: serializer.fromJson<int?>(json['detectedTotal']),
       detectedMerchant: serializer.fromJson<String?>(json['detectedMerchant']),
     );
@@ -2209,7 +2208,7 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
       'syncStatus': serializer.toJson<String>(syncStatus),
       'id': serializer.toJson<String>(id),
       'movementId': serializer.toJson<String>(movementId),
-      'localPath': serializer.toJson<String>(localPath),
+      'localPath': serializer.toJson<String?>(localPath),
       'detectedTotal': serializer.toJson<int?>(detectedTotal),
       'detectedMerchant': serializer.toJson<String?>(detectedMerchant),
     };
@@ -2222,7 +2221,7 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
     String? syncStatus,
     String? id,
     String? movementId,
-    String? localPath,
+    Value<String?> localPath = const Value.absent(),
     Value<int?> detectedTotal = const Value.absent(),
     Value<String?> detectedMerchant = const Value.absent(),
   }) => ReceiptRow(
@@ -2232,7 +2231,7 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
     syncStatus: syncStatus ?? this.syncStatus,
     id: id ?? this.id,
     movementId: movementId ?? this.movementId,
-    localPath: localPath ?? this.localPath,
+    localPath: localPath.present ? localPath.value : this.localPath,
     detectedTotal: detectedTotal.present
         ? detectedTotal.value
         : this.detectedTotal,
@@ -2312,7 +2311,7 @@ class ReceiptsCompanion extends UpdateCompanion<ReceiptRow> {
   final Value<String> syncStatus;
   final Value<String> id;
   final Value<String> movementId;
-  final Value<String> localPath;
+  final Value<String?> localPath;
   final Value<int?> detectedTotal;
   final Value<String?> detectedMerchant;
   final Value<int> rowid;
@@ -2335,15 +2334,14 @@ class ReceiptsCompanion extends UpdateCompanion<ReceiptRow> {
     this.syncStatus = const Value.absent(),
     required String id,
     required String movementId,
-    required String localPath,
+    this.localPath = const Value.absent(),
     this.detectedTotal = const Value.absent(),
     this.detectedMerchant = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : createdAt = Value(createdAt),
        updatedAt = Value(updatedAt),
        id = Value(id),
-       movementId = Value(movementId),
-       localPath = Value(localPath);
+       movementId = Value(movementId);
   static Insertable<ReceiptRow> custom({
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -2377,7 +2375,7 @@ class ReceiptsCompanion extends UpdateCompanion<ReceiptRow> {
     Value<String>? syncStatus,
     Value<String>? id,
     Value<String>? movementId,
-    Value<String>? localPath,
+    Value<String?>? localPath,
     Value<int?>? detectedTotal,
     Value<String?>? detectedMerchant,
     Value<int>? rowid,
@@ -3092,6 +3090,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'idx_movimientos_fecha',
     'CREATE INDEX idx_movimientos_fecha ON movimientos (fecha)',
   );
+  late final Index idxPresupuestosCategoriaMesActivo = Index(
+    'idx_presupuestos_categoria_mes_activo',
+    'CREATE UNIQUE INDEX idx_presupuestos_categoria_mes_activo ON presupuestos (categoria_id, mes) WHERE eliminado_en IS NULL',
+  );
+  late final Index idxRecibosMovimientoActivo = Index(
+    'idx_recibos_movimiento_activo',
+    'CREATE UNIQUE INDEX idx_recibos_movimiento_activo ON recibos (movimiento_id) WHERE eliminado_en IS NULL',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3104,6 +3110,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     syncQueue,
     syncMetadata,
     idxMovimientosFecha,
+    idxPresupuestosCategoriaMesActivo,
+    idxRecibosMovimientoActivo,
   ];
   @override
   DriftDatabaseOptions get options =>
@@ -4523,7 +4531,7 @@ typedef $$ReceiptsTableCreateCompanionBuilder = ReceiptsCompanion Function({
   Value<String> syncStatus,
   required String id,
   required String movementId,
-  required String localPath,
+  Value<String?> localPath,
   Value<int?> detectedTotal,
   Value<String?> detectedMerchant,
   Value<int> rowid,
@@ -4535,7 +4543,7 @@ typedef $$ReceiptsTableUpdateCompanionBuilder = ReceiptsCompanion Function({
   Value<String> syncStatus,
   Value<String> id,
   Value<String> movementId,
-  Value<String> localPath,
+  Value<String?> localPath,
   Value<int?> detectedTotal,
   Value<String?> detectedMerchant,
   Value<int> rowid,
@@ -4806,7 +4814,7 @@ class $$ReceiptsTableTableManager
                 Value<String> syncStatus = const Value.absent(),
                 Value<String> id = const Value.absent(),
                 Value<String> movementId = const Value.absent(),
-                Value<String> localPath = const Value.absent(),
+                Value<String?> localPath = const Value.absent(),
                 Value<int?> detectedTotal = const Value.absent(),
                 Value<String?> detectedMerchant = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -4830,7 +4838,7 @@ class $$ReceiptsTableTableManager
                 Value<String> syncStatus = const Value.absent(),
                 required String id,
                 required String movementId,
-                required String localPath,
+                Value<String?> localPath = const Value.absent(),
                 Value<int?> detectedTotal = const Value.absent(),
                 Value<String?> detectedMerchant = const Value.absent(),
                 Value<int> rowid = const Value.absent(),

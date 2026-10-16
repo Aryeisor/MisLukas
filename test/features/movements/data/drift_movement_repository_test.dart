@@ -205,7 +205,7 @@ extension on Receipt {
   ReceiptsCompanion toCompanionForTest() => ReceiptsCompanion.insert(
     id: id,
     movementId: movementId,
-    localPath: localPath,
+    localPath: Value(localPath),
     createdAt: DateTime.utc(2026, 9, 22),
     updatedAt: DateTime.utc(2026, 9, 22),
   );
