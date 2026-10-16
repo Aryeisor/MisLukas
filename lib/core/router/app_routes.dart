@@ -2,6 +2,13 @@
 abstract final class AppRoutes {
   static const String login = '/login';
 
+  /// "Verifica tu correo" después del registro (diagrama 5.1, C2). Recibe el
+  /// correo en `extra`, no en la URL.
+  static const String verifyEmail = '/verify-email';
+
+  /// Recuperación de contraseña (pantalla 3).
+  static const String recoverPassword = '/recover';
+
   // Pestañas de la barra inferior
   static const String home = '/home';
   static const String reports = '/reports';

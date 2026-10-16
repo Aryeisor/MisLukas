@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mislukas/core/database/seed/demo_seed.dart';
 import 'package:mislukas/core/database/app_database.dart';
@@ -29,7 +30,7 @@ void main() {
 
     expect(find.text('CR'), findsOneWidget);
     expect(find.text('Camila Rodríguez'), findsOneWidget);
-    expect(find.text('camila@correo.com'), findsOneWidget);
+    expect(find.text('camila@ejemplo.com'), findsOneWidget);
     expect(find.text('Perfil completo en una próxima versión'), findsOneWidget);
     expect(
       find.widgetWithText(AppSecondaryButton, 'Cerrar sesión'),
@@ -69,11 +70,31 @@ void main() {
     await openProfile(tester, db);
     expect(find.byType(ProfileScreen), findsOneWidget);
 
-    await tester.tap(find.text('Cerrar sesión'));
+    await tester.tap(find.widgetWithText(AppSecondaryButton, 'Cerrar sesión'));
+    await tester.pumpAndSettle();
+    expect(find.text('¿Cerrar sesión?'), findsOneWidget);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Cerrar sesión'),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.byType(LoginScreen), findsOneWidget);
     expect(find.byType(AppBottomNav), findsNothing);
+  });
+
+  testWidgetsWithDatabase('Cancelar no cierra la sesión', (tester, db) async {
+    await openProfile(tester, db);
+
+    await tester.tap(find.widgetWithText(AppSecondaryButton, 'Cerrar sesión'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ProfileScreen), findsOneWidget);
   });
 
   testWidgetsWithDatabase(

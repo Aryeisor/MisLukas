@@ -1,36 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/router/app_routes.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../auth_messages.dart';
 import '../register_view_model.dart';
+import 'password_strength_section.dart';
 
-/// Formulario de registro (pantalla 2, fig. 5.3). Al crear la cuenta muestra
-/// "Verifica tu correo"; [onGoToLogin] vuelve a la pestaña de inicio de sesión.
+/// Formulario de registro (pantalla 2, fig. 5.3). Al crear la cuenta abre
+/// "Verifica tu correo".
 class RegisterForm extends ConsumerWidget {
-  const RegisterForm({super.key, required this.onGoToLogin});
-
-  final VoidCallback onGoToLogin;
+  const RegisterForm({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(registerViewModelProvider);
     final viewModel = ref.read(registerViewModelProvider.notifier);
 
-    final submittedEmail = state.submittedEmail;
-    if (submittedEmail != null) {
-      return AppEmptyState(
-        icon: Icons.mark_email_read_outlined,
-        title: 'Verifica tu correo',
-        description:
-            'Te enviamos un enlace de verificación a $submittedEmail. '
-            'Ábrelo para activar tu cuenta.',
-        actionLabel: 'Ir a iniciar sesión',
-        onAction: onGoToLogin,
-      );
-    }
+    ref.listen(registerViewModelProvider.select((s) => s.submittedEmail), (
+      _,
+      email,
+    ) {
+      if (email != null) context.push(AppRoutes.verifyEmail, extra: email);
+    });
 
-    final requirements = state.requirements;
+    final failure = state.failure;
     void comingSoon() =>
         AppSnackbar.info(context, 'Disponible próximamente');
 
@@ -38,9 +35,17 @@ class RegisterForm extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (failure != null) ...[
+            AppBanner(
+              variant: AppBannerVariant.error,
+              title: authMessageFor(failure),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           AppTextField(
             label: 'Nombre',
             hint: 'Tu nombre completo',
+            maxLength: nameMaxLength,
             keyboardType: TextInputType.name,
             textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.name],
@@ -67,31 +72,12 @@ class RegisterForm extends ConsumerWidget {
             isPassword: true,
             textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.newPassword],
+            errorText: state.passwordError,
             onChanged: viewModel.setPassword,
           ),
           if (state.showStrength) ...[
             const SizedBox(height: AppSpacing.md),
-            AppPasswordStrength(
-              strength: state.strength,
-              requirements: [
-                AppRequirement(
-                  label: 'Mínimo 8 caracteres',
-                  met: requirements.minLength,
-                ),
-                AppRequirement(
-                  label: 'Una mayúscula',
-                  met: requirements.hasUppercase,
-                ),
-                AppRequirement(
-                  label: 'Un número',
-                  met: requirements.hasNumber,
-                ),
-                AppRequirement(
-                  label: 'Un símbolo',
-                  met: requirements.hasSymbol,
-                ),
-              ],
-            ),
+            PasswordStrengthSection(password: state.password),
           ],
           const SizedBox(height: AppSpacing.lg),
           AppTextField(

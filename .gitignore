@@ -46,3 +46,7 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Variables de entorno con claves reales (se usa env/dev.example.json como guía)
+/env/*.json
+!/env/*.example.json

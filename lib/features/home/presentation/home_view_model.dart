@@ -5,12 +5,12 @@ import '../../../core/theme/category_mapping.dart';
 import '../../../core/utils/clock.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../core/utils/utils_providers.dart';
+import '../../auth/data/auth_providers.dart';
 import '../../budgets/data/budgets_providers.dart';
 import '../../budgets/domain/entities/budget_alert.dart' as domain;
 import '../../movements/data/movements_providers.dart';
 import '../../movements/domain/entities/month_summary.dart';
 import '../../movements/domain/entities/movement.dart';
-import '../../profile/presentation/provisional_user.dart';
 import 'home_state.dart';
 
 /// Resumen del mes actual.
@@ -58,7 +58,7 @@ class HomeViewModel extends Notifier<HomeState> {
       recent: recentValue,
       alerts: alertsValue,
       today: ref.watch(clockProvider).today(),
-      userName: provisionalUserFirstName,
+      userName: ref.watch(currentUserProvider)?.firstName ?? '',
     );
   }
 }

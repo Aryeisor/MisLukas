@@ -38,6 +38,13 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - PRAGMA key es la única sentencia SQL con el valor dentro del texto, porque SQLite no admite parámetros en ese comando; antes se valida que la clave tenga exactamente 64 caracteres hexadecimales.
 - Los datos de demostración solo existen en modo desarrollo (`kDebugMode`): se cargan y se borran desde la galería y el Perfil con `DemoSeed` (`core/database/seed/demo_seed.dart`), con fechas relativas al reloj. En la versión de publicación la app arranca vacía y esas acciones no existen.
 - Otros se agregó a las categorías seleccionables de un gasto (registro y edición), aunque el boceto 5.7 no la muestra, porque RF-27 la incluye. Al editar un ingreso solo se ofrece Ingreso; el tipo no cambia al editar.
+- La verificación del correo al registrarse y la recuperación de contraseña usan un código de 6 dígitos escrito en la app (`verifyOTP`), no enlaces: no hay deep links (`detectSessionInUri: false`) ni cambios en `android/` o `ios/`. Las plantillas de correo de Supabase usan `{{ .Token }}`.
+- La sesión de Supabase y el verificador PKCE se guardan en `flutter_secure_storage` (`SecureSessionStorage` y `SecurePkceStorage` en `core/security/secure_auth_storage.dart`), nunca en SharedPreferences. `Supabase.initialize` usa `debug: false` para que no escriba logs.
+- `AuthRepository` ignora los errores de `onAuthStateChange`: un fallo de red al renovar el token no cierra la sesión. Solo se cierra si el servidor rechaza la sesión.
+- Auth no tiene casos de uso: los ViewModels usan `AuthRepository` y las validaciones están en `core/utils/validators.dart` (incluida la lista local de contraseñas comunes de docs/08 §8.2.4).
+- Después de guardar la contraseña con el código de recuperación se cierra la sesión en todos los dispositivos (`signOut(global)`) y el usuario vuelve a /login. Mientras la recuperación está en curso (`passwordRecoveryInProgressProvider`, se activa antes de verificar el código), el redirect no saca al usuario aunque haya sesión: `/recover` está apilada sobre `/login` y go_router evalúa el redirect con la ruta base (`/login`). La sesión temporal solo se cierra si el usuario sale por su cuenta (Volver o atrás del sistema, `RecoverPasswordViewModel.cancel`), nunca en un dispose.
+- Con sesión, la app entra directo a /home hasta que exista el desbloqueo (Fase 6). La pantalla de verificación recibe el correo en `extra` de go_router y no lo muestra.
+- Al registrarse, los metadatos del usuario llevan `nombre` y `politica_version` ("1"), para que la tabla perfiles los registre en 5B.
 
 ## Stack
 
@@ -47,7 +54,7 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - **intl**: formato de moneda y fechas.
 - **Drift (SQLite) + SQLite3MultipleCiphers**: base de datos local cifrada (Fase 4).
 - **uuid**, **path_provider** y **flutter_secure_storage**: ya incorporadas en la Fase 4 (identificadores, ubicación de la base y clave de cifrado).
-- **Supabase**: Auth, PostgreSQL con Row Level Security y Storage (Fase 5).
+- **Supabase** (`supabase_flutter`, incorporado en la Fase 5A): Auth, PostgreSQL con Row Level Security y Storage (Fase 5).
 - **Paquetes del dispositivo** (Fase 6): `camera`, `image_picker`, `google_mlkit_text_recognition`, `flutter_local_notifications`, `local_auth`, `connectivity_plus`.
 
 No agregues dependencias de una fase futura ni paquetes fuera de esta lista sin consultarme.
@@ -116,6 +123,7 @@ En `lib/core/widgets/`. Importar siempre desde `package:mislukas/core/widgets/wi
 - `AppIconButton`: botón cuadrado de 48 dp con solo ícono y tooltip (notificaciones, cerrar, volver).
 - `AppCheckboxTile`: casilla con texto que puede incluir enlaces (`AppTextSegment`).
 - `AppPasswordStrength`: barra de fortaleza (Débil/Media/Fuerte) y lista de requisitos de contraseña.
+- `AppCodeField`: código de verificación de 6 dígitos en casillas, solo números, con autocompletado del código y error.
 - `ReceiptPreview`: vista previa de un recibo con el total resaltado como "Área detectada".
 - `AppCard`: tarjeta blanca con borde sutil y `onTap` opcional.
 - `AppSectionHeader`: título de sección con acción opcional a la derecha ("Ver todos").
@@ -197,7 +205,7 @@ Detalle completo en `docs/08-seguridad.md`.
 5. **Supabase**: autenticación, RLS, sincronización.
 6. **Funciones del dispositivo**: cámara, OCR, notificaciones, biometría.
 
-**Fase actual: 4**
+**Fase actual: 5**
 
 ## Comandos
 
@@ -205,8 +213,10 @@ Detalle completo en `docs/08-seguridad.md`.
 flutter pub get        # Instalar dependencias
 flutter analyze        # Análisis estático (debe quedar sin errores ni warnings)
 flutter test           # Pruebas
-flutter run            # Ejecutar en el emulador
+flutter run --dart-define-from-file=env/dev.json   # Ejecutar en el emulador
 ```
+
+`env/dev.json` (ignorado por git) tiene `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`; se crea copiando `env/dev.example.json`. Sin esas variables la app falla al iniciar con un mensaje. `.vscode/launch.json` ya pasa ese argumento.
 
 El entorno es Windows con terminal cmd.
 

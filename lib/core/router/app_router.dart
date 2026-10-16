@@ -2,7 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/auth/data/auth_providers.dart';
 import '../../features/auth/presentation/login_screen.dart';
+import '../../features/auth/presentation/password_recovery_flow.dart';
+import '../../features/auth/presentation/recover_password_screen.dart';
+import '../../features/auth/presentation/verify_email_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/movements/presentation/confirm_movement_screen.dart';
 import '../../features/movements/presentation/confirm_movement_view_model.dart';
@@ -13,18 +17,54 @@ import '../../features/reports/presentation/reports_screen.dart';
 import '../../features/simulator/presentation/simulator_screen.dart';
 import '../widgets/dev/component_gallery_screen.dart';
 import 'app_routes.dart';
+import 'auth_redirect.dart';
 import 'main_shell.dart';
 
-/// Router de la aplicación.
+/// Router de la aplicación. El redirect decide la pantalla según la sesión
+/// (docs/05 §5.1) y se vuelve a evaluar cada vez que la sesión cambia.
 final appRouterProvider = Provider<GoRouter>((ref) {
+  // La sesión guardada ya se cargó al iniciar Supabase: se conoce sin red.
+  final signedIn = ValueNotifier<bool>(
+    ref.read(authRepositoryProvider).currentUser != null,
+  );
+  ref.listen(authStateProvider, (_, next) {
+    if (next.hasValue) signedIn.value = next.value != null;
+  });
+  // Recuperación de contraseña en curso: con la sesión temporal no se sale
+  // de la pantalla de recuperación.
+  final recoveryInProgress = ValueNotifier<bool>(
+    ref.read(passwordRecoveryInProgressProvider),
+  );
+  ref.listen(passwordRecoveryInProgressProvider, (_, next) {
+    recoveryInProgress.value = next;
+  });
+
   final router = GoRouter(
-    initialLocation: AppRoutes.login,
-    // Fase 5: agregar el redirect según la sesión guardada en el almacenamiento
-    // seguro: sin sesión -> /login; con sesión -> desbloqueo -> /home.
+    initialLocation: AppRoutes.home,
+    refreshListenable: Listenable.merge([signedIn, recoveryInProgress]),
+    // Con rutas apiladas (push), go_router evalúa aquí la ruta base: desde la
+    // recuperación llega /login, no /recover.
+    redirect: (context, state) => authRedirect(
+      location: state.matchedLocation,
+      signedIn: signedIn.value,
+      recoveryInProgress: recoveryInProgress.value,
+    ),
     routes: [
       GoRoute(
         path: AppRoutes.login,
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.verifyEmail,
+        // Sin correo (por ejemplo, al reabrir la ruta) se vuelve al login.
+        redirect: (context, state) =>
+            state.extra is String ? null : AppRoutes.login,
+        builder: (context, state) =>
+            VerifyEmailScreen(email: state.extra! as String),
+      ),
+      GoRoute(
+        path: AppRoutes.recoverPassword,
+        builder: (context, state) => const RecoverPasswordScreen(),
       ),
       // Pestañas principales: cada rama conserva su estado y comparte la barra inferior.
       StatefulShellRoute.indexedStack(
@@ -94,6 +134,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 
-  ref.onDispose(router.dispose);
+  ref.onDispose(() {
+    router.dispose();
+    signedIn.dispose();
+    recoveryInProgress.dispose();
+  });
   return router;
 });

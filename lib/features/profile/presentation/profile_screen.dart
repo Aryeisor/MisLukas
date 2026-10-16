@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/database/seed/demo_seed.dart';
-import '../../../core/router/app_routes.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/dev/demo_data_actions.dart';
 import '../../../core/widgets/widgets.dart';
+import '../../auth/presentation/auth_messages.dart';
 import 'profile_view_model.dart';
 
 /// Perfil provisional (pantalla 10). El perfil completo de docs/05 §5.2 llega
@@ -18,6 +17,26 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(profileViewModelProvider);
     final textTheme = Theme.of(context).textTheme;
+
+    ref.listen(profileViewModelProvider.select((s) => s.signOutFailure), (
+      _,
+      failure,
+    ) {
+      if (failure != null) AppSnackbar.error(context, authMessageFor(failure));
+    });
+
+    Future<void> confirmSignOut() async {
+      final confirmed = await showAppConfirmDialog(
+        context,
+        title: '¿Cerrar sesión?',
+        message:
+            'Para volver a entrar necesitarás tu correo y tu contraseña.',
+        confirmLabel: 'Cerrar sesión',
+      );
+      if (confirmed) {
+        await ref.read(profileViewModelProvider.notifier).signOut();
+      }
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -63,7 +82,7 @@ class ProfileScreen extends ConsumerWidget {
             AppSecondaryButton(
               label: 'Cerrar sesión',
               icon: Icons.logout,
-              onPressed: () => context.go(AppRoutes.login),
+              onPressed: state.isSigningOut ? null : confirmSignOut,
             ),
             // Solo en modo desarrollo; en publicación no ocupa espacio.
             if (ref.watch(demoToolsEnabledProvider)) ...[

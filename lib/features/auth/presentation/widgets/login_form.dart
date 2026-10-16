@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_routes.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../../domain/auth_failure.dart';
+import '../auth_messages.dart';
 import '../login_view_model.dart';
 
 /// Formulario de inicio de sesión (pantalla 1, fig. 5.2).
@@ -16,27 +18,33 @@ class LoginForm extends ConsumerWidget {
     final state = ref.watch(loginViewModelProvider);
     final viewModel = ref.read(loginViewModelProvider.notifier);
 
-    ref.listen(loginViewModelProvider.select((s) => s.status), (_, status) {
-      if (status == LoginStatus.success) context.go(AppRoutes.home);
-    });
+    final failure = state.failure;
 
     return AutofillGroup(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (state.status == LoginStatus.invalidCredentials) ...[
-            const AppBanner(
-              variant: AppBannerVariant.error,
-              title: 'Correo o contraseña incorrectos.',
+          if (failure != null) ...[
+            AppBanner(
+              variant: failure == AuthFailure.rateLimited
+                  ? AppBannerVariant.warning
+                  : AppBannerVariant.error,
+              icon: failure == AuthFailure.rateLimited
+                  ? Icons.lock_clock_outlined
+                  : null,
+              title: authMessageFor(failure),
             ),
-            const SizedBox(height: AppSpacing.lg),
-          ],
-          if (state.status == LoginStatus.locked) ...[
-            const AppBanner(
-              variant: AppBannerVariant.warning,
-              icon: Icons.lock_clock_outlined,
-              title: 'Demasiados intentos. Intenta de nuevo en 15 minutos.',
-            ),
+            if (failure == AuthFailure.emailNotConfirmed)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton(
+                  onPressed: () => context.push(
+                    AppRoutes.verifyEmail,
+                    extra: state.email.trim(),
+                  ),
+                  child: const Text('Verificar correo'),
+                ),
+              ),
             const SizedBox(height: AppSpacing.lg),
           ],
           Focus(
@@ -62,8 +70,7 @@ class LoginForm extends ConsumerWidget {
             onChanged: viewModel.setPassword,
             onSubmitted: (_) => viewModel.submit(),
             trailing: TextButton(
-              onPressed: () =>
-                  AppSnackbar.info(context, 'Disponible próximamente'),
+              onPressed: () => context.push(AppRoutes.recoverPassword),
               child: const Text('¿Olvidaste tu contraseña?'),
             ),
           ),
@@ -73,6 +80,14 @@ class LoginForm extends ConsumerWidget {
             isLoading: state.isSubmitting,
             onPressed: state.canSubmit ? viewModel.submit : null,
           ),
+          if (state.retrySeconds > 0) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Intenta de nuevo en ${state.retrySeconds} s',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
           const SizedBox(height: AppSpacing.xl),
           const _SocialDivider(),
           const SizedBox(height: AppSpacing.lg),

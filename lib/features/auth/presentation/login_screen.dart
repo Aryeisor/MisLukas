@@ -57,10 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: AppSpacing.xl),
               // Cada formulario se desmonta al cambiar de pestaña y su
               // ViewModel (autoDispose) se reinicia con él.
-              if (_tab == 0)
-                const LoginForm()
-              else
-                RegisterForm(onGoToLogin: () => setState(() => _tab = 0)),
+              if (_tab == 0) const LoginForm() else const RegisterForm(),
               if (kDebugMode) ...[
                 const SizedBox(height: AppSpacing.xl),
                 AppSecondaryButton(

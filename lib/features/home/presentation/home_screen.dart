@@ -157,7 +157,10 @@ class _Header extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs / 2),
               Semantics(
                 header: true,
-                child: Text('Hola, $userName 👋', style: textTheme.headlineSmall),
+                child: Text(
+                  userName.isEmpty ? 'Hola 👋' : 'Hola, $userName 👋',
+                  style: textTheme.headlineSmall,
+                ),
               ),
             ],
           ),

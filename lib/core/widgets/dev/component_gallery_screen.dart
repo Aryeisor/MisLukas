@@ -386,6 +386,11 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
             ],
           ),
 
+          _section('Código de verificación'),
+          const AppCodeField(),
+          _gap,
+          const AppCodeField(errorText: 'El código no es válido o ya venció.'),
+
           _section('Recibo'),
           const ReceiptPreview(
             merchant: 'ÉXITO AV. EL DORADO',
