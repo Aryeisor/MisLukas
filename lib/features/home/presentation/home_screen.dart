@@ -45,8 +45,9 @@ class HomeScreen extends ConsumerWidget {
             icon: Icons.receipt_long_outlined,
             title: 'Aún no tienes movimientos este mes',
             description:
-                'Registra tu primer gasto para ver en qué se va tu dinero.',
-            actionLabel: 'Registrar mi primer gasto',
+                'Registra tu primer gasto o ingreso para ver en qué se va '
+                'tu dinero.',
+            actionLabel: 'Registrar un movimiento',
             onAction: openNewMovement,
           ),
         ],
@@ -74,7 +75,7 @@ class HomeScreen extends ConsumerWidget {
                   AppSpacing.md,
                 ),
                 child: AppPrimaryButton(
-                  label: 'Nuevo gasto',
+                  label: 'Nuevo movimiento',
                   icon: Icons.add,
                   onPressed: openNewMovement,
                 ),

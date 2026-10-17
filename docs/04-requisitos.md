@@ -16,7 +16,11 @@ La pantalla de inicio responde a la pregunta que el usuario se hace con más fre
 
 **Registro de gasto por foto o manual.**
 
-Es la funcionalidad central del MVP. El usuario puede fotografiar un recibo para que la aplicación extraiga el valor total y sugiera una categoría, o registrar el movimiento a mano cuando no tiene recibo. En ambos casos puede revisar y corregir los datos antes de guardar. El registro manual también se usa para los ingresos.
+Es la funcionalidad central del MVP. El usuario puede fotografiar un recibo para que la aplicación extraiga el valor total y sugiera una categoría, o registrar el movimiento a mano cuando no tiene recibo. En ambos casos puede revisar y corregir los datos antes de guardar. En la misma pantalla, un selector Gasto | Ingreso permite registrar un ingreso (salario, prima, trabajos independientes) con su valor, descripción y fecha, sin elegir categoría.
+
+**Bienvenida para usuarios nuevos.**
+
+La primera vez que un usuario sin datos entra a la aplicación, una bienvenida de dos pasos le pregunta con cuánto dinero cuenta este mes y, si quiere, le permite definir presupuestos por categoría. Así el disponible y las alertas funcionan desde el primer gasto. Se puede omitir y no vuelve a aparecer.
 
 **Categorías y alertas de presupuesto.**
 
@@ -40,7 +44,9 @@ Tabla descriptiva de cada funcionalidad de cada pantalla con su respectiva histo
 | ----------------------------------------- | ------------------------------- | -------------------------- |
 | Registro, inicio de sesión y recuperación | Inicio de sesión / Registro     | HU-01, HU-02, HU-03, HU-04 |
 | Dashboard con disponible del mes          | Inicio                          | HU-08                      |
-| Registro por foto o manual                | Nuevo gasto, Confirma los datos | HU-05, HU-06               |
+| Registro por foto o manual                | Nuevo movimiento, Confirma los datos | HU-05, HU-06          |
+| Registro de ingresos                      | Nuevo movimiento                | HU-06                      |
+| Bienvenida para usuarios nuevos           | Bienvenida                      | HU-11                      |
 | Categorías y alertas de presupuesto       | Inicio                          | HU-08                      |
 | Reportes y comparación mensual            | Reportes                        | HU-09                      |
 | Simulador de ahorro                       | Simulador                       | HU-10                      |
@@ -59,6 +65,7 @@ Las siguientes funcionalidades se identificaron durante el diseño, pero se deja
 | Exportación de reportes             | Es útil, pero no afecta el ciclo principal de la aplicación.                                                                                                                            | Los reportes se calculan en una capa independiente de la interfaz, por lo que se pueden generar en otros formatos.                            |
 | Perfil completo                     | Se diseña en la siguiente iteración de bocetos.                                                                                                                                         | El MVP incluye las funciones mínimas de perfil exigidas por seguridad y por las tiendas (cerrar sesión, cambiar contraseña, eliminar cuenta). |
 | Categorías personalizadas           | Las categorías predeterminadas cubren la mayoría de gastos del público objetivo.                                                                                                        | Las categorías se guardan en una tabla propia, no como valores fijos en el código.                                                            |
+| Saldo inicial y saldo entre meses   | En el MVP el dinero del mes solo entra como ingresos. Registrar lo que el usuario ya tenía antes de usar la app, o lo que pasa de un mes a otro, exige un tipo de movimiento que no se confunda con un ingreso. | La restricción movimientos_tipo_check tiene nombre para agregar el tipo saldo_inicial con una migración; no contará como ingreso en reportes ni en el simulador (sección 6.4.2). |
 
 ## 4.3 Requerimientos funcionales
 
@@ -99,6 +106,7 @@ Los requisitos funcionales describen lo que el sistema debe hacer. Se agrupan po
 | RF-24 | El sistema debe guardar todo movimiento primero en la base de datos local, con estado "pendiente de sincronizar" si no hay conexión.              | Must      | HU-07 |
 | RF-25 | El sistema debe sincronizar automáticamente los movimientos pendientes cuando detecte conexión a internet.                                        | Must      | HU-07 |
 | RF-26 | El sistema debe evitar la creación de registros duplicados durante la sincronización, usando un identificador único generado en el dispositivo.   | Must      | HU-07 |
+| RF-50 | El sistema debe permitir elegir entre gasto e ingreso al registrar un movimiento. El ingreso usa automáticamente la categoría Ingreso, se registra a mano y sin recibo, con valor, descripción y una fecha que no puede ser posterior a hoy. | Must      | HU-06 |
 
 4.3.3 Requerimientos funcionales del módulo de presupuesto
 
@@ -142,6 +150,12 @@ Los requisitos funcionales describen lo que el sistema debe hacer. Se agrupan po
 | RF-47 | El sistema debe mostrar el estado de sincronización y la cantidad de cambios pendientes.                                                                 | Should    | HU-07 |
 | RF-48 | El sistema debe permitir eliminar la cuenta desde la aplicación, previa confirmación, borrando los datos del usuario en el dispositivo y en el servidor. | Must      | —     |
 | RF-49 | El sistema debe permitir consultar la política de tratamiento de datos y los términos de uso.                                                            | Must      | —     |
+
+4.3.7 Requerimientos funcionales de la bienvenida
+
+| ID    | Descripción                                                                                                                                                                                                                                                       | Prioridad | HU    |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ----- |
+| RF-51 | El sistema debe mostrar una bienvenida una sola vez a los usuarios sin ningún dato propio (movimientos ni presupuestos), decidida después de la primera sincronización exitosa, que permita registrar los ingresos del mes y, de forma opcional, los presupuestos por categoría, y que se pueda omitir. | Should    | HU-11 |
 
 Los requisitos RF-44, RF-48 y RF-49 no provienen de una historia de usuario, sino de obligaciones legales y de las políticas de publicación de Google Play y App Store, que exigen que las aplicaciones con registro permitan eliminar la cuenta desde la propia aplicación.
 

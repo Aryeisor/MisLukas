@@ -154,3 +154,17 @@ class SyncMetadata extends Table {
   @override
   Set<Column<Object>> get primaryKey => {targetTable};
 }
+
+/// Ajustes de este dispositivo, como la marca de la bienvenida (v4). No se
+/// sincronizan: se borran con el resto de los datos locales.
+@DataClassName('LocalSettingRow')
+class LocalSettings extends Table {
+  @override
+  String get tableName => 'ajustes_locales';
+
+  TextColumn get key => text().named('clave')();
+  TextColumn get value => text().named('valor')();
+
+  @override
+  Set<Column<Object>> get primaryKey => {key};
+}

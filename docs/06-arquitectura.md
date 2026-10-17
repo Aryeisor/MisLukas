@@ -232,6 +232,7 @@ lib/
     ├── budgets/                  # Categorías, presupuestos y alertas
     ├── reports/                  # Reportes por categoría y comparación mensual
     ├── simulator/                # Simulador de ahorro
+    ├── onboarding/               # Bienvenida para usuarios nuevos
     └── profile/                  # Perfil, seguridad, eliminación de cuenta
 test/                             # Pruebas unitarias y de widgets, con la misma estructura de lib/
 supabase/
@@ -359,6 +360,8 @@ Figura 6.3. Diagrama entidad-relación del esquema remoto.
 
 Estas reglas se aplican en la base de datos además de validarse en la aplicación. La validación en la app mejora la experiencia del usuario; la validación en la base de datos garantiza que ningún dato inválido llegue a guardarse, aunque alguien intente enviarlo directamente a la API.
 
+**Trabajo futuro: saldo inicial y saldo entre meses.** En el MVP el dinero del mes solo entra como ingresos. Queda pendiente registrar el dinero que el usuario ya tenía antes de usar la app (saldo inicial) y el que pasa de un mes al siguiente (saldo acumulado). Se modelará como un tipo de movimiento distinto, `saldo_inicial`, agregado a movimientos_tipo_check con una migración. Ese tipo sumará al disponible, pero no contará como ingreso en los reportes ni en el ahorro promedio del simulador, que deben reflejar solo lo que entra y sale cada mes.
+
 6.4.3 Diferencias entre el esquema local y el remoto
 
 Ambos esquemas comparten las mismas tablas y campos de negocio, pero cumplen funciones distintas, por lo que cada uno tiene elementos propios.
@@ -369,12 +372,14 @@ Ambos esquemas comparten las mismas tablas y campos de negocio, pero cumplen fun
 | Usuarios                 | Solo los datos del usuario que inició sesión                           | Datos de todos los usuarios, aislados por RLS                                            |
 | Tabla de usuarios        | No guarda credenciales; solo el perfil                                 | auth.users administrada por Supabase Auth, más perfiles                                  |
 | Campos de sincronización | estado_sync en cada registro: sincronizado, pendiente o error          | sincronizado_en: momento en que el servidor recibió el cambio, asignado por un _trigger_ |
-| Tablas adicionales       | cola_sincronizacion y metadatos_sync (última sincronización por tabla) | Ninguna adicional en el MVP                                                              |
+| Tablas adicionales       | cola_sincronizacion, metadatos_sync (última sincronización por tabla) y ajustes_locales (ajustes de este dispositivo, sin sincronizar) | Ninguna adicional en el MVP                                                              |
 | Recibos                  | ruta_local: imagen en el celular; nula si llegó de otro dispositivo    | ruta_storage: ubicación en Supabase Storage, solo si el usuario activa el respaldo       |
 | Propietario              | Sin usuario_id: la base pertenece a un solo usuario                    | usuario_id con valor por defecto auth.uid(); el cliente no lo envía                      |
 | Seguridad                | Archivo cifrado completo con SQLite3MultipleCiphers                    | Row Level Security en todas las tablas y cifrado gestionado por Supabase                 |
 | Tipos de datos           | UUID y fechas se guardan como texto; montos como INTEGER               | Tipos nativos uuid, date, timestamptz, bigint                                            |
-| Migraciones              | Gestionadas por Drift al actualizar la app                             | Scripts SQL versionados en supabase/migrations                                           |
+| Migraciones              | Gestionadas por Drift al actualizar la app (versión 4 del esquema)     | Scripts SQL versionados en supabase/migrations                                           |
+
+La tabla ajustes_locales (clave y valor) guarda decisiones que solo valen para este dispositivo. Por ahora tiene una sola: que la bienvenida de los usuarios nuevos ya se completó, se omitió o no hacía falta (sección 5.2, pantalla 11). Vive en la base cifrada y no se sincroniza, así que se borra junto con los datos locales al cerrar sesión o al entrar otro usuario.
 
 El campo sincronizado_en merece una explicación. Los relojes de los celulares no siempre están en hora, por lo que depender solo de la fecha del dispositivo para saber qué cambios descargar podría hacer que algunos se pierdan. Por eso, cuando un registro llega al servidor, un _trigger_ de PostgreSQL le asigna la hora del servidor. Al descargar cambios, la app pide "todo lo modificado en el servidor desde mi última sincronización", usando siempre el reloj del servidor como referencia.
 

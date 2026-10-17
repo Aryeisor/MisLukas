@@ -16,7 +16,15 @@ final DateTime defaultCategoriesCreatedAt = DateTime.utc(2026, 1, 1);
 /// Base local de MisLukas (docs/06 §6.4.3). La apertura cifrada está en
 /// `database_connection.dart`; las pruebas usan una base en memoria.
 @DriftDatabase(
-  tables: [Categories, Movements, Budgets, Receipts, SyncQueue, SyncMetadata],
+  tables: [
+    Categories,
+    Movements,
+    Budgets,
+    Receipts,
+    SyncQueue,
+    SyncMetadata,
+    LocalSettings,
+  ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
@@ -26,8 +34,10 @@ class AppDatabase extends _$AppDatabase {
   /// registros no eliminados.
   /// v3 (Fase 5C): la cola guarda cuándo reintentar un registro rechazado y el
   /// código del rechazo.
+  /// v4 (Fase 5D): ajustes del dispositivo (ajustes_locales), por ahora solo
+  /// la marca de la bienvenida.
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   bool _closed = false;
 
@@ -58,6 +68,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 3) {
         await m.addColumn(syncQueue, syncQueue.nextAttemptAt);
         await m.addColumn(syncQueue, syncQueue.lastError);
+      }
+      if (from < 4) {
+        await m.createTable(localSettings);
       }
     },
     beforeOpen: (details) async {

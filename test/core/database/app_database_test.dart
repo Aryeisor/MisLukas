@@ -25,6 +25,7 @@ void main() {
       'recibos',
       'cola_sincronizacion',
       'metadatos_sync',
+      'ajustes_locales',
     });
   });
 

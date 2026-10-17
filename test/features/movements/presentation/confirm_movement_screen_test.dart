@@ -148,7 +148,29 @@ void main() {
       expect(delete.destructive, isTrue);
     });
 
-    testWidgetsWithDatabase('ingreso: solo la categoría Ingreso', (
+    testWidgetsWithDatabase(
+      'ingreso: formulario de ingreso con valor, descripción y fecha',
+      (tester, db) async {
+        final id = await movementIdOf(tester, db, 'Salario');
+        await pumpScreen(
+          tester,
+          ConfirmMovementScreen(mode: EditMovementMode(id)),
+          database: db,
+        );
+
+        expect(find.text('VALOR DEL INGRESO'), findsOneWidget);
+        expect(find.text('3.800.000'), findsOneWidget);
+        expect(find.text('DESCRIPCIÓN'), findsOneWidget);
+        expect(find.widgetWithText(TextField, 'Salario'), findsOneWidget);
+        expect(find.text('FECHA'), findsOneWidget);
+        expect(find.text('1 de septiembre'), findsOneWidget);
+        // Sin categorías ni nota: el tipo no cambia al editar.
+        expect(find.byType(AppChip), findsNothing);
+        expect(find.text('NOTA (OPCIONAL)'), findsNothing);
+      },
+    );
+
+    testWidgetsWithDatabase('ingreso: el calendario no ofrece días futuros', (
       tester,
       db,
     ) async {
@@ -159,10 +181,12 @@ void main() {
         database: db,
       );
 
-      expect(find.text('VALOR DEL INGRESO'), findsOneWidget);
-      expect(find.text('3.800.000'), findsOneWidget);
-      expect(find.byType(AppChip), findsOneWidget);
-      expect(chipSelected(tester, 'Ingreso'), isTrue);
+      await tester.tap(find.text('1 de septiembre'));
+      await tester.pumpAndSettle();
+      final picker = tester.widget<CalendarDatePicker>(
+        find.byType(CalendarDatePicker),
+      );
+      expect(picker.lastDate, DateTime(2026, 9, 22));
     });
 
     testWidgetsWithDatabase('la nota se precarga', (tester, db) async {

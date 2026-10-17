@@ -52,7 +52,7 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - `perfiles` se crea con un trigger SECURITY DEFINER en `auth.users`, que rechaza el registro si falta `politica_version`. Guarda `politica_aceptada_en`. El usuario solo puede actualizar `nombre` (grant por columna).
 - El check del tipo de movimiento se llama `movimientos_tipo_check`, para ampliarlo con una migración (por ejemplo, 'saldo_inicial').
 - Bucket privado `recibos`: 5 MB, JPEG y PNG, ruta `{usuario_id}/{recibo_id}.jpg` sin subcarpetas. Hay políticas de select, insert y update; ninguna de delete. `recibos.ruta_storage` debe empezar por la carpeta del dueño.
-- Base local en la versión 3 de Drift. En la v2, `recibos.ruta_local` admite null (un recibo que llega del servidor no trae la imagen) y `Receipt.localPath` es `String?`. En la v3, `cola_sincronizacion` tiene `proximo_intento` y `ultimo_error` (solo el código).
+- Base local en la versión 4 de Drift. En la v2, `recibos.ruta_local` admite null (un recibo que llega del servidor no trae la imagen) y `Receipt.localPath` es `String?`. En la v3, `cola_sincronizacion` tiene `proximo_intento` y `ultimo_error` (solo el código). En la v4 se agrega `ajustes_locales` (clave, valor): ajustes del dispositivo, sin sincronizar, que se borran con la base.
 - DTOs remotos (5B) en `features/*/data/remote/`. Convierten entre filas de Drift y JSON de Supabase con `RemoteJson` (`core/sync/remote_json.dart`). `toCompanion()` deja `estado_sync = 'sincronizado'`, y el de recibos no toca `ruta_local`.
 - Sincronización (5C) en `core/sync/`:
   - `SyncService` hace push, luego pull, y otro push si el pull dejó algo en la cola. Solo corre una ejecución a la vez.
@@ -92,6 +92,22 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
   - Pantalla `/profile/delete-account`, construida con `AuthFlowScaffold`.
   - Queda pendiente el correo que confirma la eliminación (requiere SMTP).
 - Inicio: `MovementTile.isPendingSync` se muestra en lo pendiente o rechazado, y deslizar hacia abajo sincroniza. MainShell muestra `AppOfflineIndicator`. El Perfil muestra el estado de la sincronización con `AppBanner` (`SyncStatusBanner`).
+- Ingresos (5D, RF-50):
+  - El botón de Inicio dice "Nuevo movimiento" (el boceto 5.4 dice "Nuevo gasto") y abre `/movements/new`, que tiene el selector Gasto | Ingreso (`AppSegmentedTabs` dentro de `Semantics(label: 'Tipo de movimiento')`). Gasto viene seleccionado; `?type=income` abre Ingreso.
+  - El ingreso se registra en la misma pantalla con `IncomeFormFields` (`movements/presentation/widgets/`): valor, descripción y fecha. Usa `RegisterIncome`, que delega en `RegisterMovement` con la categoría Ingreso, origen manual y sin recibo. Las validaciones son las mismas: monto, largo y fecha no futura.
+  - En `ConfirmMovementViewModel` el modo es `CreateIncomeMode`. Al editar un ingreso se muestra el mismo formulario (sin categorías ni nota) y se guarda con `UpdateMovement(amount, description, date)`.
+  - La fecha es un `AppSecondaryButton` ("Hoy, 17 de octubre", `DateLabels.longDay`) que abre `showDatePicker` con `lastDate` = hoy. El formulario de gasto sigue sin fecha (usa hoy).
+  - `flutter_localizations` (SDK) con `es_CO` en `MaterialApp.router` (`core/config/app_localization.dart`), para que el calendario salga en español.
+- Bienvenida (5D, RF-51, `features/onboarding/`):
+  - "Usuario nuevo" significa que no tiene ningún dato propio: movimientos, presupuestos (aunque estén eliminados) ni categorías propias. Lo revisa `OnboardingRepository.hasOwnData`.
+  - Se decide después de la primera sincronización exitosa de la sesión. `WelcomeController` escucha cuándo cambia `SyncState.lastSyncedAt`; sin conexión espera.
+  - Si el usuario tiene datos, la marca queda como completada sin mostrar nada. La marca vive en `ajustes_locales` (`bienvenida = completada`) y se va con la base al cerrar sesión o al entrar otro usuario.
+  - `WelcomeLauncher` (en el `builder` de `MaterialApp.router`) abre `/welcome` con `push`, no con el redirect, para no perder un formulario abierto. Durante la recuperación de contraseña la sesión no está `ready`, así que no se decide nada.
+  - Paso 1: ingresos con `RegisterIncome`. Al volver y continuar, los ya guardados se actualizan y los quitados se eliminan (no se duplican). Paso 2: presupuestos opcionales con `SetBudget`.
+  - Omitir el paso 1 pasa al 2. Terminar u omitir el paso 2, o Volver en el paso 1, la marca como completada.
+  - `DemoSeed.load()` también marca la bienvenida; `clearAll()` no la toca.
+  - Limitación conocida: la marca es local. Quien la omitió sin registrar nada la ve de nuevo en otro celular. No hay columnas en Supabase para esto.
+- Los presupuestos son por mes y no se copian al siguiente: el día 1 el usuario queda sin presupuestos. Se resuelve en la 5E, junto con el historial (RF-22) y la fecha del gasto (RF-19).
 
 ## Stack
 
@@ -102,6 +118,7 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - **Drift (SQLite) + SQLite3MultipleCiphers**: base de datos local cifrada (Fase 4).
 - **uuid**, **path_provider** y **flutter_secure_storage**: ya incorporadas en la Fase 4 (identificadores, ubicación de la base y clave de cifrado).
 - **Supabase** (`supabase_flutter`, incorporado en la Fase 5A): Auth, PostgreSQL con Row Level Security y Storage (Fase 5).
+- **flutter_localizations** (del SDK, incorporado en la Fase 5D): textos del sistema en español (calendario).
 - **Paquetes del dispositivo** (Fase 6): `camera`, `image_picker`, `google_mlkit_text_recognition`, `flutter_local_notifications`, `local_auth`, `connectivity_plus`.
 
 No agregues dependencias de una fase futura ni paquetes fuera de esta lista sin consultarme.
@@ -141,6 +158,7 @@ lib/
     ├── budgets/     # Categorías, presupuestos y alertas
     ├── reports/     # Reportes por categoría y comparación mensual
     ├── simulator/   # Simulador de ahorro
+    ├── onboarding/  # Bienvenida para usuarios nuevos
     └── profile/     # Perfil, seguridad, eliminación de cuenta
 ```
 

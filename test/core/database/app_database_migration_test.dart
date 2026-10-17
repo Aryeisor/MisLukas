@@ -71,16 +71,17 @@ AppDatabase openV1Database() {
   );
 }
 
-/// Definición SQL de las tablas e índices afectados por la v2 y la v3.
+/// Definición SQL de las tablas e índices afectados por la v2, la v3 y la v4.
 Future<Map<String, String>> schemaOf(AppDatabase db) async {
   final rows = await db
       .customSelect(
         'SELECT name, sql FROM sqlite_master '
-        'WHERE tbl_name IN (?, ?, ?) AND sql IS NOT NULL',
+        'WHERE tbl_name IN (?, ?, ?, ?) AND sql IS NOT NULL',
         variables: [
           Variable.withString('presupuestos'),
           Variable.withString('recibos'),
           Variable.withString('cola_sincronizacion'),
+          Variable.withString('ajustes_locales'),
         ],
       )
       .get();
@@ -88,12 +89,12 @@ Future<Map<String, String>> schemaOf(AppDatabase db) async {
 }
 
 void main() {
-  test('v1 → v3 conserva los datos', () async {
+  test('v1 → v4 conserva los datos', () async {
     final db = openV1Database();
     addTearDown(db.close);
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.read<int>('user_version'), 3);
+    expect(version.read<int>('user_version'), 4);
 
     final budget = await db.select(db.budgets).getSingle();
     expect(budget.limitAmount, 800000);
@@ -109,6 +110,9 @@ void main() {
     expect(entry.recordId, 'm1');
     expect(entry.nextAttemptAt, isNull);
     expect(entry.lastError, isNull);
+
+    // v4: ajustes del dispositivo, vacíos (la bienvenida se decide después).
+    expect(await db.select(db.localSettings).get(), isEmpty);
   });
 
   test('el esquema migrado es igual al de una instalación nueva', () async {

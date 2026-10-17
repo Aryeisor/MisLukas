@@ -21,6 +21,7 @@ void main() {
         AppRoutes.profile,
         AppRoutes.newMovement,
         AppRoutes.editMovementWith('abc'),
+        AppRoutes.welcome,
       ]) {
         expect(redirect(location), AppRoutes.login, reason: location);
       }

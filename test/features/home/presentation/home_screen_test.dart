@@ -25,7 +25,7 @@ void main() {
     expect(find.text('Últimos movimientos'), findsOneWidget);
     expect(find.byTooltip('Notificaciones'), findsOneWidget);
     expect(
-      find.widgetWithText(AppPrimaryButton, 'Nuevo gasto'),
+      find.widgetWithText(AppPrimaryButton, 'Nuevo movimiento'),
       findsOneWidget,
     );
 

@@ -18,8 +18,23 @@ abstract final class AppRoutes {
   /// Eliminar la cuenta (RF-48), a pantalla completa.
   static const String deleteAccount = '/profile/delete-account';
 
-  // Flujo de nuevo gasto, a pantalla completa
+  /// Bienvenida para usuarios nuevos (RF-51), a pantalla completa.
+  static const String welcome = '/welcome';
+
+  // Flujo de nuevo movimiento, a pantalla completa
   static const String newMovement = '/movements/new';
+
+  /// Parámetro de [newMovement] con el tipo inicial: income abre Ingreso.
+  static const String typeParam = 'type';
+
+  /// Valor de [typeParam] para abrir Nuevo movimiento con Ingreso.
+  static const String incomeType = 'income';
+
+  /// Nuevo movimiento con Ingreso seleccionado.
+  static String newIncome() => Uri(
+    path: newMovement,
+    queryParameters: {typeParam: incomeType},
+  ).toString();
   static const String confirmMovement = '/movements/confirm';
 
   /// Edición de un movimiento existente (RF-23), a pantalla completa.

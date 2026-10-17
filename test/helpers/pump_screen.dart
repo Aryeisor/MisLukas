@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mislukas/app.dart';
+import 'package:mislukas/core/config/app_localization.dart';
 import 'package:mislukas/core/database/app_database.dart';
 import 'package:mislukas/core/database/database_providers.dart';
 import 'package:mislukas/core/theme/app_theme.dart';
@@ -47,7 +48,13 @@ Future<void> pumpScreen(
       // Sin reintentos: los errores se muestran de inmediato y no dejan
       // timers pendientes.
       retry: (_, _) => null,
-      child: MaterialApp(theme: AppTheme.light, home: screen),
+      child: MaterialApp(
+        theme: AppTheme.light,
+        locale: appLocale,
+        supportedLocales: appSupportedLocales,
+        localizationsDelegates: appLocalizationsDelegates,
+        home: screen,
+      ),
     ),
   );
   await tester.pumpAndSettle();

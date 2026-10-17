@@ -1,12 +1,16 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:drift/drift.dart' show driftRuntimeOptions;
+import 'package:drift/native.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mislukas/core/database/app_database.dart';
 import 'package:mislukas/core/database/database_connection.dart';
 import 'package:mislukas/core/database/local_data_wiper.dart';
 import 'package:mislukas/core/security/database_key_store.dart';
 import 'package:mislukas/core/security/device_session_store.dart';
+import 'package:mislukas/features/onboarding/data/drift_onboarding_repository.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
@@ -56,6 +60,27 @@ void main() {
     expect(await sessionStore.readOwner(), isNull);
     // La próxima base usa una clave nueva.
     expect(await keyStore.getOrCreateKey(), isNot(firstKey));
+  });
+
+  test('la marca de la bienvenida se va con el archivo de la base', () async {
+    driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+    final file = File(p.join(directory.path, databaseFileName));
+    final db = AppDatabase(NativeDatabase(file));
+    await DriftOnboardingRepository(db).markWelcomeDone();
+    expect(await DriftOnboardingRepository(db).isWelcomeDone(), isTrue);
+
+    await FileLocalDataWiper(
+      closeDatabase: db.close,
+      directory: () async => directory,
+      keyStore: DatabaseKeyStore(const FlutterSecureStorage()),
+      sessionStore: const SecureDeviceSessionStore(FlutterSecureStorage()),
+      onWiped: () {},
+    ).wipe();
+
+    // La base nueva arranca sin la marca: la bienvenida se decide otra vez.
+    final fresh = AppDatabase(NativeDatabase(file));
+    addTearDown(fresh.close);
+    expect(await DriftOnboardingRepository(fresh).isWelcomeDone(), isFalse);
   });
 
   test('sin archivos no falla', () async {

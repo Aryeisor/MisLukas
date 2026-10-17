@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/error_messages.dart';
 import '../../../core/theme/category_mapping.dart';
 import '../../../core/theme/category_style.dart';
+import '../../../core/utils/clock.dart';
+import '../../../core/utils/utils_providers.dart';
 import '../../../core/utils/validators.dart';
 import '../data/movements_providers.dart';
 import '../domain/entities/movement.dart';
@@ -27,8 +29,8 @@ const List<CategoryKind> expenseCategoryOptions = [
 /// Única categoría de un ingreso.
 const List<CategoryKind> incomeCategoryOptions = [CategoryKind.ingreso];
 
-/// Para qué se abre la pantalla: registrar un gasto nuevo o editar un
-/// movimiento existente.
+/// Para qué se abre el formulario: registrar un gasto o un ingreso nuevo, o
+/// editar un movimiento existente.
 sealed class ConfirmMovementMode {
   const ConfirmMovementMode();
 }
@@ -47,6 +49,18 @@ class CreateMovementMode extends ConfirmMovementMode {
   int get hashCode => Object.hash(CreateMovementMode, method);
 }
 
+/// Registrar un ingreso nuevo (RF-50): categoría Ingreso, origen manual y sin
+/// recibo. El formulario vive en Nuevo movimiento.
+class CreateIncomeMode extends ConfirmMovementMode {
+  const CreateIncomeMode();
+
+  @override
+  bool operator ==(Object other) => other is CreateIncomeMode;
+
+  @override
+  int get hashCode => (CreateIncomeMode).hashCode;
+}
+
 /// Editar el movimiento [movementId] (RF-23).
 class EditMovementMode extends ConfirmMovementMode {
   const EditMovementMode(this.movementId);
@@ -61,13 +75,16 @@ class EditMovementMode extends ConfirmMovementMode {
   int get hashCode => Object.hash(EditMovementMode, movementId);
 }
 
-/// Estado inmutable de Confirma los datos y de Editar movimiento.
+/// Estado inmutable de Confirma los datos, del formulario de ingreso y de
+/// Editar movimiento.
 class ConfirmMovementState {
   const ConfirmMovementState({
     required this.mode,
     this.amount,
     this.category,
     this.note = '',
+    this.description = '',
+    this.date,
     this.isIncome = false,
     this.isSaving = false,
   });
@@ -76,6 +93,12 @@ class ConfirmMovementState {
   final int? amount;
   final CategoryKind? category;
   final String note;
+
+  /// Descripción del ingreso ("Salario"). Los gastos no la editan.
+  final String description;
+
+  /// Día del ingreso. Null en los gastos, que usan la fecha de hoy.
+  final DateTime? date;
 
   /// El movimiento que se edita es un ingreso. Al editar no cambia el tipo.
   final bool isIncome;
@@ -96,6 +119,8 @@ class ConfirmMovementState {
     int? Function()? amount,
     CategoryKind? category,
     String? note,
+    String? description,
+    DateTime? date,
     bool? isSaving,
   }) {
     return ConfirmMovementState(
@@ -103,6 +128,8 @@ class ConfirmMovementState {
       amount: amount != null ? amount() : this.amount,
       category: category ?? this.category,
       note: note ?? this.note,
+      description: description ?? this.description,
+      date: date ?? this.date,
       isIncome: isIncome,
       isSaving: isSaving ?? this.isSaving,
     );
@@ -155,6 +182,12 @@ class ConfirmMovementViewModel extends AsyncNotifier<ConfirmMovementState> {
         ),
       CreateMovementMode(method: MovementEntryMethod.manual) =>
         ConfirmMovementState(mode: mode),
+      CreateIncomeMode() => ConfirmMovementState(
+        mode: mode,
+        category: CategoryKind.ingreso,
+        date: ref.read(clockProvider).today(),
+        isIncome: true,
+      ),
       EditMovementMode(:final movementId) => _load(movementId),
     };
   }
@@ -166,6 +199,8 @@ class ConfirmMovementViewModel extends AsyncNotifier<ConfirmMovementState> {
       amount: movement.amount,
       category: categoryKindForId(movement.categoryId),
       note: movement.note ?? '',
+      description: movement.description,
+      date: movement.isIncome ? movement.date : null,
       isIncome: movement.isIncome,
     );
   }
@@ -187,13 +222,25 @@ class ConfirmMovementViewModel extends AsyncNotifier<ConfirmMovementState> {
 
   void setNote(String note) => _update((s) => s.copyWith(note: note));
 
-  /// Registra el gasto o guarda los cambios.
+  void setDescription(String description) =>
+      _update((s) => s.copyWith(description: description));
+
+  /// Cambia el día del ingreso. Una fecha futura no se acepta (el calendario
+  /// tampoco la ofrece).
+  void setDate(DateTime date) {
+    final day = dateOnly(date);
+    if (day.isAfter(ref.read(clockProvider).today())) return;
+    _update((s) => s.copyWith(date: day));
+  }
+
+  /// Registra el gasto o el ingreso, o guarda los cambios.
   Future<ConfirmMovementResult> save() async {
     final current = state.value;
     if (current == null || !current.canSave) return dataSaveErrorMessage;
     final amount = current.amount!;
     final category = current.category!;
     final note = current.note.trim();
+    final description = current.description.trim();
 
     return _run(current, () async {
       switch (mode) {
@@ -211,6 +258,26 @@ class ConfirmMovementViewModel extends AsyncNotifier<ConfirmMovementState> {
                     ? demoReceiptMerchantName
                     : '',
                 note: note.isEmpty ? null : note,
+              );
+        case CreateIncomeMode():
+          // Vacía: se usa el nombre de la categoría.
+          await ref
+              .read(registerIncomeProvider)
+              .call(
+                amount: amount,
+                description: description,
+                date: current.date,
+              );
+        case EditMovementMode(:final movementId) when current.isIncome:
+          // El ingreso no cambia de categoría ni tiene nota en su formulario.
+          // Una descripción vacía conserva la anterior.
+          await ref
+              .read(updateMovementProvider)
+              .call(
+                id: movementId,
+                amount: amount,
+                description: description,
+                date: current.date,
               );
         case EditMovementMode(:final movementId):
           await ref

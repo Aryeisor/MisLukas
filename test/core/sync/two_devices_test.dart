@@ -3,6 +3,7 @@ import 'package:mislukas/core/database/seed/demo_seed.dart';
 import 'package:mislukas/core/sync/sync_service.dart';
 import 'package:mislukas/features/budgets/data/drift_budget_repository.dart';
 import 'package:mislukas/features/movements/data/drift_movement_repository.dart';
+import 'package:mislukas/features/onboarding/data/drift_onboarding_repository.dart';
 
 import '../../helpers/fake_sync_server.dart';
 import '../../helpers/sync_device.dart';
@@ -163,6 +164,7 @@ void main() {
           db: device.db,
           movements: DriftMovementRepository(device.db),
           budgets: DriftBudgetRepository(device.db),
+          onboarding: DriftOnboardingRepository(device.db),
           clock: device.clock,
           ids: device.ids,
         ).load();

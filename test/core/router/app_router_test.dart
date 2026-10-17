@@ -232,7 +232,7 @@ void main() {
     await pumpApp(tester, database: db);
     await loginAsDemoUser(tester);
 
-    await tester.tap(find.text('Nuevo gasto'));
+    await tester.tap(find.text('Nuevo movimiento'));
     await tester.pumpAndSettle();
 
     expect(find.byType(NewMovementScreen), findsOneWidget);
@@ -250,7 +250,7 @@ void main() {
       await pumpApp(tester, database: db);
       await loginAsDemoUser(tester);
 
-      await tester.tap(find.text('Nuevo gasto'));
+      await tester.tap(find.text('Nuevo movimiento'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Continuar'));
       await tester.pumpAndSettle();

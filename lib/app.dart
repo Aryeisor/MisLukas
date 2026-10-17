@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/config/app_localization.dart';
 import 'core/router/app_router.dart';
 import 'core/sync/sync_controller.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/widgets/foreign_data_prompt.dart';
+import 'features/onboarding/presentation/welcome_launcher.dart';
 
 class MisLukasApp extends ConsumerWidget {
   const MisLukasApp({super.key});
@@ -15,9 +17,14 @@ class MisLukasApp extends ConsumerWidget {
       title: 'MisLukas',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      locale: appLocale,
+      supportedLocales: appSupportedLocales,
+      localizationsDelegates: appLocalizationsDelegates,
       routerConfig: ref.watch(appRouterProvider),
       builder: (context, child) => ForeignDataPrompt(
-        child: SyncTriggers(child: child ?? const SizedBox.shrink()),
+        child: WelcomeLauncher(
+          child: SyncTriggers(child: child ?? const SizedBox.shrink()),
+        ),
       ),
     );
   }

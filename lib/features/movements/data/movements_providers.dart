@@ -6,6 +6,7 @@ import '../../budgets/data/budgets_providers.dart';
 import '../domain/repositories/movement_repository.dart';
 import '../domain/usecases/delete_movement.dart';
 import '../domain/usecases/get_movement.dart';
+import '../domain/usecases/register_income.dart';
 import '../domain/usecases/register_movement.dart';
 import '../domain/usecases/update_movement.dart';
 import '../domain/usecases/watch_month_summary.dart';
@@ -23,6 +24,10 @@ final registerMovementProvider = Provider<RegisterMovement>(
     clock: ref.watch(clockProvider),
     ids: ref.watch(idGeneratorProvider),
   ),
+);
+
+final registerIncomeProvider = Provider<RegisterIncome>(
+  (ref) => RegisterIncome(ref.watch(registerMovementProvider)),
 );
 
 final updateMovementProvider = Provider<UpdateMovement>(

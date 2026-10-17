@@ -7,12 +7,17 @@ import '../../../core/errors/error_messages.dart';
 import '../../../core/router/app_routes.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/category_style.dart';
+import '../../../core/utils/clock.dart';
+import '../../../core/utils/utils_providers.dart';
 import '../../../core/widgets/widgets.dart';
 import 'confirm_movement_view_model.dart';
 import 'movement_entry_method.dart';
+import 'widgets/income_form_fields.dart';
 
 /// Confirma los datos (foto), Registra tu gasto (manual) o Editar movimiento:
-/// pantalla 7, fig. 5.6 y 5.7.
+/// pantalla 7, fig. 5.6 y 5.7. Al editar un ingreso muestra su formulario
+/// (valor, descripción y fecha). El ingreso nuevo se registra en Nuevo
+/// movimiento.
 class ConfirmMovementScreen extends ConsumerWidget {
   const ConfirmMovementScreen({super.key, required this.mode});
 
@@ -132,11 +137,7 @@ class ConfirmMovementScreen extends ConsumerWidget {
     Widget header,
   ) {
     final viewModel = ref.read(confirmMovementViewModelProvider(mode).notifier);
-    final amountLabel = _isPhoto
-        ? 'Valor detectado'
-        : state.isIncome
-        ? 'Valor del ingreso'
-        : 'Valor del gasto';
+    final amountLabel = _isPhoto ? 'Valor detectado' : 'Valor del gasto';
 
     return Column(
       children: [
@@ -164,38 +165,50 @@ class ConfirmMovementScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppSpacing.lg),
               ],
-              AppCard(
-                child: AppAmountField(
-                  label: amountLabel,
-                  initialValue: state.amount,
-                  onChanged: viewModel.setAmount,
+              if (state.isIncome)
+                IncomeFormFields(
+                  amount: state.amount,
+                  onAmountChanged: viewModel.setAmount,
+                  description: state.description,
+                  onDescriptionChanged: viewModel.setDescription,
+                  date: state.date,
+                  today: ref.watch(clockProvider).today(),
+                  onDateChanged: viewModel.setDate,
+                )
+              else ...[
+                AppCard(
+                  child: AppAmountField(
+                    label: amountLabel,
+                    initialValue: state.amount,
+                    onChanged: viewModel.setAmount,
+                  ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AppFieldLabel(
-                      _isPhoto ? 'Categoría sugerida' : 'Categoría',
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    AppChipGroup<CategoryKind>(
-                      options: state.categoryOptions,
-                      selected: state.category,
-                      labelBuilder: (category) => category.label,
-                      onSelected: viewModel.setCategory,
-                    ),
-                  ],
+                const SizedBox(height: AppSpacing.lg),
+                AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppFieldLabel(
+                        _isPhoto ? 'Categoría sugerida' : 'Categoría',
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      AppChipGroup<CategoryKind>(
+                        options: state.categoryOptions,
+                        selected: state.category,
+                        labelBuilder: (category) => category.label,
+                        onSelected: viewModel.setCategory,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              AppCard(
-                child: _NoteField(
-                  initialValue: state.note,
-                  onChanged: viewModel.setNote,
+                const SizedBox(height: AppSpacing.lg),
+                AppCard(
+                  child: _NoteField(
+                    initialValue: state.note,
+                    onChanged: viewModel.setNote,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),

@@ -9,10 +9,12 @@ import '../../features/auth/presentation/password_recovery_flow.dart';
 import '../../features/auth/presentation/recover_password_screen.dart';
 import '../../features/auth/presentation/verify_email_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
+import '../../features/movements/domain/entities/movement.dart';
 import '../../features/movements/presentation/confirm_movement_screen.dart';
 import '../../features/movements/presentation/confirm_movement_view_model.dart';
 import '../../features/movements/presentation/movement_entry_method.dart';
 import '../../features/movements/presentation/new_movement_screen.dart';
+import '../../features/onboarding/presentation/welcome_screen.dart';
 import '../../features/profile/presentation/delete_account_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
@@ -116,10 +118,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
-      // Flujo de nuevo gasto: fuera del shell, a pantalla completa sin barra inferior.
+      // Flujo de nuevo movimiento: fuera del shell, a pantalla completa sin
+      // barra inferior.
       GoRoute(
         path: AppRoutes.newMovement,
-        builder: (context, state) => const NewMovementScreen(),
+        builder: (context, state) => NewMovementScreen(
+          initialType:
+              state.uri.queryParameters[AppRoutes.typeParam] ==
+                  AppRoutes.incomeType
+              ? MovementType.income
+              : MovementType.expense,
+        ),
       ),
       GoRoute(
         path: AppRoutes.confirmMovement,
@@ -136,6 +145,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => ConfirmMovementScreen(
           mode: EditMovementMode(state.pathParameters[AppRoutes.idParam]!),
         ),
+      ),
+      // Se abre con push (WelcomeLauncher), encima de lo que esté visible.
+      GoRoute(
+        path: AppRoutes.welcome,
+        builder: (context, state) => const WelcomeScreen(),
       ),
       GoRoute(
         path: AppRoutes.deleteAccount,

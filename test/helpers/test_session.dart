@@ -69,6 +69,8 @@ class FakeLocalDataWiper implements LocalDataWiper {
         await db.delete(db.budgets).go();
         await db.delete(db.syncQueue).go();
         await db.delete(db.syncMetadata).go();
+        // La marca de la bienvenida vive en la base: se va con el archivo.
+        await db.delete(db.localSettings).go();
       });
     }
     await _store.clearOwner();
