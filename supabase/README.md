@@ -16,6 +16,7 @@ Ejecútalas una sola vez, **en este orden**. Cada una depende de las anteriores.
 | 6 | `migrations/006_perfiles.sql` | Tabla `perfiles`, trigger de registro en `auth.users` y perfiles de las cuentas existentes |
 | 7 | `migrations/007_storage_recibos.sql` | Bucket privado `recibos` y sus políticas |
 | 8 | `migrations/008_recibos_indice_por_usuario.sql` | Cambia la unicidad de recibos a (usuario_id, movimiento_id), para que el error al usar un movimiento ajeno no revele si existe |
+| 9 | `migrations/009_sincronizacion_y_cuenta.sql` | Fase 5C: la última escritura gana y la eliminación prevalece (trigger en las 4 tablas), política de delete en el bucket `recibos` y la función `eliminar_mi_cuenta()` |
 
 En una instalación desde cero, la 005 ya crea el índice nuevo y la 008 no cambia nada. Igual hay que ejecutarla: es la que corrige las bases donde se ejecutó la versión anterior de la 005.
 
@@ -40,13 +41,13 @@ Los archivos además son repetibles (`if not exists`, `create or replace`, `drop
 
 **Si el estado quedó confuso** (por ejemplo, se ejecutó una versión anterior de un archivo, o un trozo suelto seleccionado a mano fuera de la transacción):
 
-1. Ejecuta `rollback_5b.sql`. Borra todo lo de la 5B, incluidos los datos de esas tablas. Es **solo para desarrollo**.
+1. Ejecuta `rollback_5b.sql`. Borra todo lo de la 5B y la 009, incluidos los datos de esas tablas. Es **solo para desarrollo**.
 2. Vuelve a ejecutar las migraciones desde la 001.
 
 ## Verificación
 
 Ejecuta `verify.sql` completo (pégalo y pulsa Run). El resultado es una tabla con columnas `#`, `prueba` y `resultado`: **todas las filas deben decir `OK`**. Una fila `FALLO: …` incluye el código de error de PostgreSQL y el mensaje.
 
-`verify.sql` crea dos usuarios temporales (A y B) y datos de prueba, y al final lo revierte todo: no deja usuarios, filas ni archivos.
+`verify.sql` crea tres usuarios temporales (A, B y C) y datos de prueba, y al final lo revierte todo: no deja usuarios, filas ni archivos. C prueba la eliminación de la cuenta con `eliminar_mi_cuenta()`; el token se simula con el claim `amr` (contraseña verificada hace poco).
 
 La primera parte del archivo trae listados para revisar a mano: RLS por tabla, políticas, permisos y usuarios sin perfil. Para ver uno, selecciónalo en el editor y ejecuta solo esa selección.

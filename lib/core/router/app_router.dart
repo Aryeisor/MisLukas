@@ -1,8 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/auth/data/auth_providers.dart';
+import '../../features/auth/presentation/account_session_controller.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/password_recovery_flow.dart';
 import '../../features/auth/presentation/recover_password_screen.dart';
@@ -12,6 +13,7 @@ import '../../features/movements/presentation/confirm_movement_screen.dart';
 import '../../features/movements/presentation/confirm_movement_view_model.dart';
 import '../../features/movements/presentation/movement_entry_method.dart';
 import '../../features/movements/presentation/new_movement_screen.dart';
+import '../../features/profile/presentation/delete_account_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
 import '../../features/simulator/presentation/simulator_screen.dart';
@@ -20,15 +22,23 @@ import 'app_routes.dart';
 import 'auth_redirect.dart';
 import 'main_shell.dart';
 
+/// Navegador raíz: los avisos globales (por ejemplo, datos de otra cuenta)
+/// abren sus diálogos aquí, sin depender de la pantalla visible.
+final rootNavigatorKeyProvider = Provider<GlobalKey<NavigatorState>>(
+  (ref) => GlobalKey<NavigatorState>(debugLabel: 'raiz'),
+);
+
 /// Router de la aplicación. El redirect decide la pantalla según la sesión
 /// (docs/05 §5.1) y se vuelve a evaluar cada vez que la sesión cambia.
 final appRouterProvider = Provider<GoRouter>((ref) {
   // La sesión guardada ya se cargó al iniciar Supabase: se conoce sin red.
+  // Solo cuenta como sesión cuando la base local es de ese usuario: si es de
+  // otro, el usuario se queda en el login hasta confirmar que se borra.
   final signedIn = ValueNotifier<bool>(
-    ref.read(authRepositoryProvider).currentUser != null,
+    ref.read(accountSessionProvider) == AccountSessionStatus.ready,
   );
-  ref.listen(authStateProvider, (_, next) {
-    if (next.hasValue) signedIn.value = next.value != null;
+  ref.listen(accountSessionProvider, (_, next) {
+    signedIn.value = next == AccountSessionStatus.ready;
   });
   // Recuperación de contraseña en curso: con la sesión temporal no se sale
   // de la pantalla de recuperación.
@@ -40,6 +50,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   });
 
   final router = GoRouter(
+    navigatorKey: ref.read(rootNavigatorKeyProvider),
     initialLocation: AppRoutes.home,
     refreshListenable: Listenable.merge([signedIn, recoveryInProgress]),
     // Con rutas apiladas (push), go_router evalúa aquí la ruta base: desde la
@@ -125,6 +136,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => ConfirmMovementScreen(
           mode: EditMovementMode(state.pathParameters[AppRoutes.idParam]!),
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.deleteAccount,
+        builder: (context, state) => const DeleteAccountScreen(),
       ),
       if (kDebugMode)
         GoRoute(

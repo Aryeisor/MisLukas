@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/data/auth_providers.dart';
 import '../../auth/domain/auth_failure.dart';
+import '../../auth/presentation/account_session_controller.dart';
 
 /// Estado inmutable del Perfil provisional.
 class ProfileState {
@@ -11,6 +12,7 @@ class ProfileState {
     required this.initials,
     this.isSigningOut = false,
     this.signOutFailure,
+    this.unsyncedOnSignOut,
   });
 
   final String fullName;
@@ -24,9 +26,14 @@ class ProfileState {
   /// Error al cerrar sesión; null si no hubo error.
   final AuthFailure? signOutFailure;
 
+  /// Cambios que no se pudieron enviar antes de cerrar sesión: el usuario
+  /// debe confirmar que se pierden. Null si no hay nada que confirmar.
+  final int? unsyncedOnSignOut;
+
   ProfileState copyWith({
     bool? isSigningOut,
     AuthFailure? Function()? signOutFailure,
+    int? Function()? unsyncedOnSignOut,
   }) {
     return ProfileState(
       fullName: fullName,
@@ -36,6 +43,9 @@ class ProfileState {
       signOutFailure: signOutFailure != null
           ? signOutFailure()
           : this.signOutFailure,
+      unsyncedOnSignOut: unsyncedOnSignOut != null
+          ? unsyncedOnSignOut()
+          : this.unsyncedOnSignOut,
     );
   }
 }
@@ -44,8 +54,8 @@ final profileViewModelProvider =
     NotifierProvider<ProfileViewModel, ProfileState>(ProfileViewModel.new);
 
 /// ViewModel del Perfil provisional: datos del usuario con sesión y cierre de
-/// sesión. El perfil completo (cuenta, seguridad, sincronización y
-/// eliminación de cuenta) llega en una próxima versión.
+/// sesión. El perfil completo (cuenta, seguridad y preferencias) llega en una
+/// próxima versión.
 class ProfileViewModel extends Notifier<ProfileState> {
   @override
   ProfileState build() {
@@ -60,23 +70,36 @@ class ProfileViewModel extends Notifier<ProfileState> {
     );
   }
 
-  /// Cierra la sesión en este dispositivo. El router vuelve al login.
-  /// Los datos locales se conservan hasta la Fase 5C.
-  Future<void> signOut() async {
+  /// Cierra la sesión y borra los datos de este dispositivo (RF-13). Antes
+  /// intenta enviar los cambios pendientes; si quedan, pide confirmación
+  /// ([ProfileState.unsyncedOnSignOut]) salvo con [force]. El router vuelve
+  /// al login.
+  Future<void> signOut({bool force = false}) async {
     if (state.isSigningOut) return;
-    state = state.copyWith(isSigningOut: true, signOutFailure: () => null);
-    try {
-      await ref.read(authRepositoryProvider).signOut();
-      if (!ref.mounted) return;
-      state = state.copyWith(isSigningOut: false);
-    } on AuthFailureException catch (error) {
-      if (!ref.mounted) return;
-      state = state.copyWith(
+    state = state.copyWith(
+      isSigningOut: true,
+      signOutFailure: () => null,
+      unsyncedOnSignOut: () => null,
+    );
+    final outcome = await ref
+        .read(accountActionsProvider)
+        .signOut(force: force);
+    if (!ref.mounted) return;
+    state = switch (outcome) {
+      SignOutDone() => state.copyWith(isSigningOut: false),
+      SignOutHasPending(:final count) => state.copyWith(
         isSigningOut: false,
-        signOutFailure: () => error.failure,
-      );
-    }
+        unsyncedOnSignOut: () => count,
+      ),
+      SignOutFailed(:final failure) => state.copyWith(
+        isSigningOut: false,
+        signOutFailure: () => failure,
+      ),
+    };
   }
+
+  /// El usuario decidió no cerrar sesión para no perder sus cambios.
+  void keepSession() => state = state.copyWith(unsyncedOnSignOut: () => null);
 }
 
 /// Iniciales del primer nombre y del primer apellido, en mayúscula:

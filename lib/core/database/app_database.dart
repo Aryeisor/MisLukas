@@ -24,8 +24,21 @@ class AppDatabase extends _$AppDatabase {
   /// v2 (Fase 5B): recibos.ruta_local admite null, y la unicidad de
   /// presupuestos (categoría y mes) y recibos (movimiento) solo aplica a los
   /// registros no eliminados.
+  /// v3 (Fase 5C): la cola guarda cuándo reintentar un registro rechazado y el
+  /// código del rechazo.
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
+
+  bool _closed = false;
+
+  /// Cerrar dos veces no hace nada: la base se cierra al borrar los datos
+  /// locales y otra vez cuando el provider se desecha.
+  @override
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    await super.close();
+  }
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -41,6 +54,10 @@ class AppDatabase extends _$AppDatabase {
         await m.alterTable(TableMigration(receipts));
         await m.createIndex(idxPresupuestosCategoriaMesActivo);
         await m.createIndex(idxRecibosMovimientoActivo);
+      }
+      if (from < 3) {
+        await m.addColumn(syncQueue, syncQueue.nextAttemptAt);
+        await m.addColumn(syncQueue, syncQueue.lastError);
       }
     },
     beforeOpen: (details) async {

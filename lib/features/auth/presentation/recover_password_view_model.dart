@@ -50,7 +50,8 @@ class RecoverPasswordState {
   /// El código se invalidó en la app por superar los intentos.
   bool get codeLocked => failedCodeAttempts >= maxRecoveryCodeAttempts;
 
-  String? get emailError => emailTouched && email.isNotEmpty && !isValidEmail(email)
+  String? get emailError =>
+      emailTouched && email.isNotEmpty && !isValidEmail(email)
       ? 'Ingresa un correo válido'
       : null;
 
@@ -62,8 +63,7 @@ class RecoverPasswordState {
     return failure == null ? null : authMessageFor(failure);
   }
 
-  PasswordRequirements get requirements =>
-      PasswordRequirements.check(password);
+  PasswordRequirements get requirements => PasswordRequirements.check(password);
 
   PasswordStrength get strength => passwordStrength(password);
 
@@ -179,14 +179,18 @@ class RecoverPasswordViewModel extends Notifier<RecoverPasswordState> {
     state = state.copyWith(isSubmitting: true, failure: () => null);
     // Antes de verificar: la sesión temporal llega durante la llamada y el
     // router debe dejar al usuario en esta pantalla.
-    _recoveryFlow.start();
+    await _recoveryFlow.start();
+    if (!ref.mounted) return;
     try {
       await ref
           .read(authRepositoryProvider)
           .verifyRecoveryCode(email: state.email, code: state.code);
       _hasRecoverySession = true;
       if (!ref.mounted) return;
-      state = state.copyWith(isSubmitting: false, step: RecoverStep.newPassword);
+      state = state.copyWith(
+        isSubmitting: false,
+        step: RecoverStep.newPassword,
+      );
     } on AuthFailureException catch (error) {
       if (!ref.mounted) return;
       _recoveryFlow.end();

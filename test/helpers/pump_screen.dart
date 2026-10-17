@@ -13,6 +13,7 @@ import 'package:mislukas/features/auth/data/auth_providers.dart';
 
 import 'domain_fixtures.dart';
 import 'fake_auth_repository.dart';
+import 'test_session.dart';
 
 /// Base en memoria y reloj fijo (22/09/2026) para las pantallas.
 List<Override> databaseOverrides(AppDatabase database, {Clock? clock}) => [
@@ -32,6 +33,7 @@ Future<void> pumpScreen(
   Widget screen, {
   AppDatabase? database,
   FakeAuthRepository? auth,
+  TestSession? session,
   List<Override> overrides = const [],
 }) async {
   await tester.pumpWidget(
@@ -39,6 +41,7 @@ Future<void> pumpScreen(
       overrides: [
         authOverride(auth),
         if (database != null) ...databaseOverrides(database),
+        ...(session ?? TestSession()).overrides(database),
         ...overrides,
       ],
       // Sin reintentos: los errores se muestran de inmediato y no dejan
@@ -55,6 +58,7 @@ Future<void> pumpApp(
   WidgetTester tester, {
   AppDatabase? database,
   FakeAuthRepository? auth,
+  TestSession? session,
   List<Override> overrides = const [],
 }) async {
   await tester.pumpWidget(
@@ -62,6 +66,7 @@ Future<void> pumpApp(
       overrides: [
         authOverride(auth ?? FakeAuthRepository()),
         if (database != null) ...databaseOverrides(database),
+        ...(session ?? TestSession()).overrides(database),
         ...overrides,
       ],
       retry: (_, _) => null,

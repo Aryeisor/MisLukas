@@ -117,16 +117,25 @@ void main() {
     await expectation;
   });
 
-  test('un presupuesto eliminado se reactiva al guardarlo', () async {
-    await budgets.save(mercado(1000), at: testToday);
-    await (db.update(db.budgets)..where((t) => t.id.equals('b1'))).write(
-      BudgetsCompanion(deletedAt: Value(DateTime.utc(2026, 9, 23))),
-    );
-    expect(await budgets.getForMonth(DateTime(2026, 9)), isEmpty);
+  test(
+    'un presupuesto eliminado no revive: se crea otro con id nuevo',
+    () async {
+      await budgets.save(mercado(1000), at: testToday);
+      final deletedAt = DateTime.utc(2026, 9, 23);
+      await (db.update(db.budgets)..where((t) => t.id.equals('b1'))).write(
+        BudgetsCompanion(deletedAt: Value(deletedAt)),
+      );
+      expect(await budgets.getForMonth(DateTime(2026, 9)), isEmpty);
 
-    await budgets.save(mercado(3000, id: 'nuevo'), at: testToday);
-    final active = await budgets.getForMonth(DateTime(2026, 9));
-    expect(active.single.id, 'b1');
-    expect(active.single.limitAmount, 3000);
-  });
+      await budgets.save(mercado(3000, id: 'nuevo'), at: testToday);
+      final active = await budgets.getForMonth(DateTime(2026, 9));
+      expect(active.single.id, 'nuevo');
+      expect(active.single.limitAmount, 3000);
+
+      final old = await (db.select(
+        db.budgets,
+      )..where((t) => t.id.equals('b1'))).getSingle();
+      expect(old.deletedAt, deletedAt);
+    },
+  );
 }

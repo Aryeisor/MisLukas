@@ -130,6 +130,15 @@ class SyncQueue extends Table {
   DateTimeColumn get createdAt => dateTime().named('fecha')();
   IntColumn get attempts =>
       integer().named('intentos').withDefault(const Constant(0))();
+
+  /// Momento a partir del cual se puede reintentar un registro que el
+  /// servidor rechazó; null si se puede enviar ya (v3).
+  DateTimeColumn get nextAttemptAt =>
+      dateTime().named('proximo_intento').nullable()();
+
+  /// Código del último rechazo del servidor (por ejemplo, 23514). Solo el
+  /// código: nunca el mensaje, que puede incluir datos del usuario (v3).
+  TextColumn get lastError => text().named('ultimo_error').nullable()();
 }
 
 /// Última sincronización de cada tabla (docs/06 §6.4.3).

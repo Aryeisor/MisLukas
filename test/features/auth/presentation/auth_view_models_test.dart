@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mislukas/core/security/device_session_store.dart';
 import 'package:mislukas/features/auth/data/auth_providers.dart';
 import 'package:mislukas/features/auth/domain/auth_failure.dart';
 import 'package:mislukas/features/auth/presentation/auth_messages.dart';
@@ -11,18 +12,24 @@ import 'package:mislukas/features/auth/presentation/register_view_model.dart';
 import 'package:mislukas/features/auth/presentation/verify_email_view_model.dart';
 
 import '../../../helpers/fake_auth_repository.dart';
+import '../../../helpers/test_session.dart';
 
 void main() {
   const email = 'camila@ejemplo.com';
   const goodPassword = 'Lukas#Ahorro26';
 
   late FakeAuthRepository auth;
+  late MemoryDeviceSessionStore sessionStore;
   late ProviderContainer container;
 
   setUp(() {
     auth = FakeAuthRepository();
+    sessionStore = MemoryDeviceSessionStore();
     container = ProviderContainer(
-      overrides: [authRepositoryProvider.overrideWithValue(auth)],
+      overrides: [
+        authRepositoryProvider.overrideWithValue(auth),
+        deviceSessionStoreProvider.overrideWithValue(sessionStore),
+      ],
     );
     addTearDown(container.dispose);
   });

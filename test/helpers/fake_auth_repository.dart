@@ -34,9 +34,8 @@ class FakeAuthRepository implements AuthRepository {
   void failNext(AuthFailure failure) => _nextFailure = failure;
 
   /// Emite un error en el stream, como un fallo de red al renovar el token.
-  void emitStreamError() => _changes.addError(
-    const AuthFailureException(AuthFailure.network),
-  );
+  void emitStreamError() =>
+      _changes.addError(const AuthFailureException(AuthFailure.network));
 
   /// Cambia la sesión desde fuera (por ejemplo, revocada en el servidor).
   void setSession(AuthUser? user) => _setCurrent(user);
@@ -108,6 +107,14 @@ class FakeAuthRepository implements AuthRepository {
   @override
   Future<void> updatePassword({required String newPassword}) =>
       _call('updatePassword', () => _setCurrent(null));
+
+  @override
+  Future<void> reauthenticate({required String password}) =>
+      _call('reauthenticate', () {
+        if (_current == null) {
+          throw const AuthFailureException(AuthFailure.unknown);
+        }
+      });
 
   @override
   Future<void> signOut() => _call('signOut', () => _setCurrent(null));

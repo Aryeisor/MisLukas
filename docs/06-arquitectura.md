@@ -449,6 +449,10 @@ Se añaden dos reglas complementarias:
 - **La eliminación prevalece.** Si un registro fue eliminado en un lugar y modificado en otro, se respeta la eliminación. Resulta más confuso para el usuario ver reaparecer un gasto que borró que perder una edición menor.
 - **Los registros nuevos nunca entran en conflicto**, porque sus identificadores son únicos por construcción.
 
+**La misma regla en el servidor.** Como el envío va antes de la recepción, un celular que estuvo sin conexión podría pisar en el servidor una edición más reciente hecha en otro dispositivo. Para evitarlo, un _trigger_ de PostgreSQL (supabase/migrations/009) aplica las mismas reglas al recibir cada cambio: una versión con actualizado_en más viejo que la guardada no la reemplaza, una eliminación siempre se acepta y un registro eliminado ya no cambia. La solicitud responde con éxito y el dispositivo recibe en la descarga la versión que quedó.
+
+**Limitación conocida: la hora del dispositivo.** El campo actualizado_en lo pone el dispositivo que hizo el cambio, con su propio reloj. Un celular con la hora mal configurada (adelantada) puede ganar conflictos que no le corresponden, y uno atrasado puede perderlos. El servidor no puede corregirlo, porque sincronizado_en solo indica cuándo llegó el cambio, no cuándo se hizo. Para el MVP se acepta: los conflictos son poco frecuentes y afectan a un registro puntual que el usuario puede corregir.
+
 **Por qué esta estrategia es suficiente para el MVP.** Los datos de MisLukas son personales: cada registro pertenece a un solo usuario, que en la mayoría de los casos usa un solo celular. Los conflictos reales son poco frecuentes y, cuando ocurren, afectan a un movimiento puntual que el usuario puede corregir fácilmente. Estrategias más elaboradas, como la fusión campo por campo o los CRDT, agregarían una complejidad que no se justifica en esta etapa. Reconocemos como limitación que "la última escritura gana" depende del reloj de los dispositivos; si en el futuro el uso en varios dispositivos se vuelve común, se evaluará la fusión por campo.
 
 6.6.4 Qué funciona sin internet y qué no

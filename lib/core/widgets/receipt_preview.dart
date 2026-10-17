@@ -159,10 +159,8 @@ class _DetectedTotal extends StatelessWidget {
               Flexible(
                 child: Text(
                   'Área detectada',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.surface,
-                    letterSpacing: 0,
-                  ),
+                  style: Theme.of(context).textTheme.labelSmall
+                      ?.copyWith(color: AppColors.surface, letterSpacing: 0),
                 ),
               ),
             ],

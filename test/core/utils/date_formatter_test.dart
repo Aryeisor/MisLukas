@@ -43,4 +43,14 @@ void main() {
     expect(DateLabels.isSameMonth(DateTime(2026, 8, 31), today), isFalse);
     expect(DateLabels.isSameMonth(DateTime(2025, 9, 22), today), isFalse);
   });
+
+  test('timeAgo dice hace cuánto pasó', () {
+    final now = DateTime(2026, 9, 22, 10, 30);
+    String ago(Duration d) => DateLabels.timeAgo(now.subtract(d), now);
+    expect(ago(const Duration(seconds: 20)), 'hace un momento');
+    expect(ago(const Duration(minutes: 5)), 'hace 5 min');
+    expect(ago(const Duration(hours: 2, minutes: 10)), 'hace 2 h');
+    expect(ago(const Duration(days: 1, hours: 3)), 'hace 1 día');
+    expect(ago(const Duration(days: 3)), 'hace 3 días');
+  });
 }

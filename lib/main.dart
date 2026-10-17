@@ -4,7 +4,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'core/config/env.dart';
+import 'core/security/device_session_store.dart';
 import 'core/security/secure_auth_storage.dart';
+import 'features/auth/data/supabase_auth_repository.dart';
+import 'features/auth/presentation/password_recovery_flow.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,5 +29,20 @@ Future<void> main() async {
     debug: false,
   );
 
-  runApp(const ProviderScope(child: MisLukasApp()));
+  const sessionStore = SecureDeviceSessionStore();
+  // Si la app se cerró a mitad de una recuperación de contraseña, la sesión
+  // guardada es temporal: se cierra antes de abrir la base o sincronizar.
+  await clearInterruptedRecovery(
+    store: sessionStore,
+    auth: SupabaseAuthRepository(Supabase.instance.client.auth),
+  );
+  // Dueño de la base local, para decidir la pantalla inicial sin esperar.
+  final owner = await sessionStore.readOwner().catchError((Object _) => null);
+
+  runApp(
+    ProviderScope(
+      overrides: [initialLocalOwnerProvider.overrideWithValue(owner)],
+      child: const MisLukasApp(),
+    ),
+  );
 }

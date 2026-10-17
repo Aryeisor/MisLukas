@@ -45,15 +45,53 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - Después de guardar la contraseña con el código de recuperación se cierra la sesión en todos los dispositivos (`signOut(global)`) y el usuario vuelve a /login. Mientras la recuperación está en curso (`passwordRecoveryInProgressProvider`, se activa antes de verificar el código), el redirect no saca al usuario aunque haya sesión: `/recover` está apilada sobre `/login` y go_router evalúa el redirect con la ruta base (`/login`). La sesión temporal solo se cierra si el usuario sale por su cuenta (Volver o atrás del sistema, `RecoverPasswordViewModel.cancel`), nunca en un dispose.
 - Con sesión, la app entra directo a /home hasta que exista el desbloqueo (Fase 6). La pantalla de verificación recibe el correo en `extra` de go_router y no lo muestra.
 - Al registrarse, los metadatos del usuario llevan `nombre` y `politica_version` ("1"), para que la tabla perfiles los registre en 5B.
-- Esquema remoto (5B) en `supabase/migrations/` (001 a 008), ejecutado a mano en el SQL Editor. Cada archivo es una transacción (`begin/commit`) y es repetible. `supabase/verify.sql` comprueba RLS, permisos y aislamiento entre dos usuarios. `supabase/rollback_5b.sql` deshace todo (solo en desarrollo).
+- Esquema remoto en `supabase/migrations/` (001 a 008 de la 5B, 009 de la 5C), ejecutado a mano en el SQL Editor. Cada archivo es una transacción (`begin/commit`) y es repetible. `supabase/verify.sql` comprueba RLS, permisos y aislamiento entre dos usuarios. `supabase/rollback_5b.sql` deshace todo (solo en desarrollo).
 - Las categorías predeterminadas son filas globales en Supabase, con `usuario_id` null y los mismos UUID fijos (docs/06 y docs/08). Es la única columna `usuario_id` nullable. Todos las leen, nadie las modifica y la app no las envía.
 - En Supabase, `usuario_id` tiene `default auth.uid()` y `sincronizado_en` la asigna un trigger. El cliente no envía ninguno de los dos.
 - Presupuestos y recibos son únicos solo entre los no eliminados, con índices únicos parciales (`where eliminado_en is null`), tanto en Supabase como en Drift. En Supabase los índices incluyen `usuario_id`: (usuario_id, categoria_id, mes) en presupuestos y (usuario_id, movimiento_id) en recibos (migración 008). Si el índice de recibos fuera solo sobre `movimiento_id`, el recibo de otro usuario chocaría con él (23505) antes de que actuara la llave foránea (23503), y el código de error revelaría que ese movimiento existe. En Drift los índices no llevan `usuario_id`, porque la base local es de un solo usuario. El único `unique` total extra es `movimientos (usuario_id, id)`, destino de la llave foránea compuesta de recibos: un recibo solo puede apuntar a un movimiento del mismo usuario. Un trigger (`validar_categoria_del_usuario`) exige que la categoría sea predeterminada o del mismo usuario.
 - `perfiles` se crea con un trigger SECURITY DEFINER en `auth.users`, que rechaza el registro si falta `politica_version`. Guarda `politica_aceptada_en`. El usuario solo puede actualizar `nombre` (grant por columna).
 - El check del tipo de movimiento se llama `movimientos_tipo_check`, para ampliarlo con una migración (por ejemplo, 'saldo_inicial').
 - Bucket privado `recibos`: 5 MB, JPEG y PNG, ruta `{usuario_id}/{recibo_id}.jpg` sin subcarpetas. Hay políticas de select, insert y update; ninguna de delete. `recibos.ruta_storage` debe empezar por la carpeta del dueño.
-- Base local en la versión 2 de Drift: `recibos.ruta_local` admite null (un recibo que llega del servidor no trae la imagen) y `Receipt.localPath` es `String?`.
+- Base local en la versión 3 de Drift. En la v2, `recibos.ruta_local` admite null (un recibo que llega del servidor no trae la imagen) y `Receipt.localPath` es `String?`. En la v3, `cola_sincronizacion` tiene `proximo_intento` y `ultimo_error` (solo el código).
 - DTOs remotos (5B) en `features/*/data/remote/`. Convierten entre filas de Drift y JSON de Supabase con `RemoteJson` (`core/sync/remote_json.dart`). `toCompanion()` deja `estado_sync = 'sincronizado'`, y el de recibos no toca `ruta_local`.
+- Sincronización (5C) en `core/sync/`:
+  - `SyncService` hace push, luego pull, y otro push si el pull dejó algo en la cola. Solo corre una ejecución a la vez.
+  - `SyncRemoteSource` es la fuente remota: `SupabaseSyncRemoteSource` en la app y `FakeSyncServer` en las pruebas.
+  - `LocalSyncStore` maneja la cola, la aplicación de filas remotas y los cursores. `sync_tables.dart` describe las 4 tablas en el orden de sus llaves foráneas.
+- Push:
+  - Varias entradas de un mismo registro se envían como un solo upsert con la fila actual. Los lotes son de 100 y van agrupados por las mismas columnas. Dentro de cada tabla, las eliminaciones van primero.
+  - Si un lote es rechazado, se reenvía de a un registro. El registro rechazado queda con `estado_sync = error` y espera 5 min · 2^(n−1), con tope de 24 h. Los errores de red o de sesión detienen el push sin marcar nada.
+  - El primer 23505 en una tabla con "único entre activos" se difiere: lo resuelve el pull.
+- Pull:
+  - Avanza por llave (sincronizado_en, id) desde el cursor menos 5 min de solape, en páginas de 200. Ignora las categorías predeterminadas.
+  - Un eliminado que llega del servidor se guarda como lápida. Si la fila es igual a la local, no se escribe nada.
+  - Si dos presupuestos activos de la misma categoría y mes tienen ids distintos, gana el de `actualizado_en` mayor (con empate, el de id mayor) y el otro se elimina de forma lógica.
+- En el servidor, la migración 009 aplica la misma regla con un trigger (`conservar_ultima_escritura`): una versión más vieja no reemplaza a la guardada, una eliminación siempre se acepta y un registro eliminado ya no cambia. `DriftBudgetRepository.save` ya no revive presupuestos eliminados: crea uno con id nuevo.
+- `SyncController` (`core/sync/sync_controller.dart`) solo sincroniza con la sesión lista:
+  - al abrir la app o iniciar sesión;
+  - 2 s después de cada escritura (observa la cola);
+  - al volver a primer plano (`SyncTriggers` en `app.dart`);
+  - cada 5 min;
+  - sin conexión, con reintentos a 5, 10, 20, 40 y 60 s.
+
+  Sin connectivity_plus (Fase 6), "sin conexión" es el resultado del último intento. `syncAutoTriggersProvider` lo apaga en las pruebas.
+- La base local tiene dueño: el id del usuario se guarda en `flutter_secure_storage` (`DeviceSessionStore`). `AccountSessionController` (`features/auth/presentation/`) da el estado `signedOut`, `foreignData`, `wiping` o `ready`. El router solo cuenta la sesión con `ready`.
+  - Si entra otro usuario, `ForeignDataPrompt` pide confirmar y se borra todo antes de abrir la base. Hay uno solo, global: está montado en el `builder` de `MaterialApp.router` y abre su diálogo en el navegador raíz (`rootNavigatorKeyProvider`). Así aparece una sola vez después del login, de verificar el registro o en cualquier pantalla. Si no puede mostrarse, cierra la sesión con un mensaje (`accountNoticeProvider`).
+  - El borrado (`FileLocalDataWiper`) borra primero la clave y el dueño. Después cierra la base (con tope de 5 s) y borra los archivos; los errores de esos dos pasos se ignoran. Al abrir, una base sin clave guardada se descarta (`deleteStaleDatabase`).
+  - El controlador tiene un tope de 15 s por borrado y siempre recalcula el estado al terminar. Un cierre de sesión se aplica de inmediato aunque haya un borrado en curso. Nunca queda con sesión sin `ready` ni aviso.
+  - Después de un cierre voluntario el dueño se borra en memoria y en el almacenamiento seguro; la siguiente cuenta entra sin aviso. Solo si no se pudo borrar la clave se conserva el dueño, y entonces la siguiente cuenta ve el aviso.
+  - Una base sin dueño (de antes de 5C) pasa al usuario que entra.
+- Una sesión revocada sin que el usuario la cierre conserva los datos cifrados (docs/06 §6.6.4, docs/08 §8.2.6).
+- `AccountActions` cierra la sesión: intenta enviar todo (10 s). Si quedan pendientes, el Perfil pide confirmar que se pierden. Luego cierra la sesión y `LocalDataWiper` borra la base (con `-wal`, `-shm` y `-journal`), la carpeta `recibos/`, la clave de cifrado y el dueño. `appDatabaseProvider` se invalida y la próxima base usa una clave nueva.
+- La marca de recuperación en curso también se guarda en el almacenamiento seguro. Si la app se cerró después de verificar el código, `main()` cierra esa sesión temporal antes de abrir la base (`clearInterruptedRecovery`).
+- Eliminación de cuenta (5C), sin Edge Function ni service_role:
+  - La app verifica de nuevo la contraseña (`AuthRepository.reauthenticate`).
+  - Borra `{uid}/*` en Storage en páginas de 100 (política de delete de la 009).
+  - Llama a `eliminar_mi_cuenta()`, que es SECURITY DEFINER, borra solo `auth.uid()` en cascada y exige el claim `amr` con la contraseña verificada hace menos de 5 min y que no queden archivos. Responde `P0001` con hint `reautenticacion` o `archivos_pendientes`.
+  - Si la RPC falla después de borrar los archivos, se reintenta sin pedir la contraseña durante 4 min 30 s.
+  - Pantalla `/profile/delete-account`, construida con `AuthFlowScaffold`.
+  - Queda pendiente el correo que confirma la eliminación (requiere SMTP).
+- Inicio: `MovementTile.isPendingSync` se muestra en lo pendiente o rechazado, y deslizar hacia abajo sincroniza. MainShell muestra `AppOfflineIndicator`. El Perfil muestra el estado de la sincronización con `AppBanner` (`SyncStatusBanner`).
 
 ## Stack
 

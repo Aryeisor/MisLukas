@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/sync/sync_status.dart';
 import '../../../core/theme/category_mapping.dart';
 import '../../../core/utils/clock.dart';
 import '../../../core/utils/date_formatter.dart';
@@ -97,6 +98,7 @@ HomeState buildHomeState({
           category: categoryKindForId(movement.categoryId),
           dateLabel: DateLabels.relativeDay(movement.date, today),
           amount: movement.amount,
+          isPendingSync: movement.syncStatus != SyncStatus.synced,
         ),
     ],
   );

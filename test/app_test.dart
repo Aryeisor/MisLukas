@@ -221,6 +221,7 @@ void main() {
 
     final clear = find.text('Borrar todos los datos');
     await tester.ensureVisible(clear);
+    await tester.pumpAndSettle();
     await tester.tap(clear);
     await tester.pumpAndSettle();
     expect(find.text('¿Borrar todos los datos?'), findsOneWidget);
@@ -250,6 +251,7 @@ void main() {
     await openTab(tester, 'Perfil');
     final load = find.text('Cargar datos de demostración');
     await tester.ensureVisible(load);
+    await tester.pumpAndSettle();
     await tester.tap(load);
     await tester.pumpAndSettle();
     await openTab(tester, 'Inicio');

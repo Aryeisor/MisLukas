@@ -15,6 +15,9 @@ abstract final class AppRoutes {
   static const String simulator = '/simulator';
   static const String profile = '/profile';
 
+  /// Eliminar la cuenta (RF-48), a pantalla completa.
+  static const String deleteAccount = '/profile/delete-account';
+
   // Flujo de nuevo gasto, a pantalla completa
   static const String newMovement = '/movements/new';
   static const String confirmMovement = '/movements/confirm';
@@ -33,9 +36,10 @@ abstract final class AppRoutes {
   static const String methodParam = 'method';
 
   /// Ruta de confirmación con su método de registro.
-  static String confirmMovementWith(String method) =>
-      Uri(path: confirmMovement, queryParameters: {methodParam: method})
-          .toString();
+  static String confirmMovementWith(String method) => Uri(
+    path: confirmMovement,
+    queryParameters: {methodParam: method},
+  ).toString();
 
   /// Galería de componentes, solo en modo debug.
   static const String devComponents = '/dev/components';

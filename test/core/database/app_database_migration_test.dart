@@ -60,21 +60,27 @@ AppDatabase openV1Database() {
           'creado_en, actualizado_en) VALUES (?, ?, ?, ?, ?, ?)',
           ['r1', 'm1', 'recibos/r1.jpg', 87400, _at, _at],
         );
+        raw.execute(
+          'INSERT INTO cola_sincronizacion (tabla, registro_id, operacion, '
+          'fecha, intentos) VALUES (?, ?, ?, ?, ?)',
+          ['movimientos', 'm1', 'crear', _at, 0],
+        );
         raw.execute('PRAGMA user_version = 1');
       },
     ),
   );
 }
 
-/// Definición SQL de las tablas e índices afectados por la v2.
+/// Definición SQL de las tablas e índices afectados por la v2 y la v3.
 Future<Map<String, String>> schemaOf(AppDatabase db) async {
   final rows = await db
       .customSelect(
         'SELECT name, sql FROM sqlite_master '
-        'WHERE tbl_name IN (?, ?) AND sql IS NOT NULL',
+        'WHERE tbl_name IN (?, ?, ?) AND sql IS NOT NULL',
         variables: [
           Variable.withString('presupuestos'),
           Variable.withString('recibos'),
+          Variable.withString('cola_sincronizacion'),
         ],
       )
       .get();
@@ -82,12 +88,12 @@ Future<Map<String, String>> schemaOf(AppDatabase db) async {
 }
 
 void main() {
-  test('v1 → v2 conserva los datos', () async {
+  test('v1 → v3 conserva los datos', () async {
     final db = openV1Database();
     addTearDown(db.close);
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.read<int>('user_version'), 2);
+    expect(version.read<int>('user_version'), 3);
 
     final budget = await db.select(db.budgets).getSingle();
     expect(budget.limitAmount, 800000);
@@ -97,6 +103,12 @@ void main() {
     expect(receipt.localPath, 'recibos/r1.jpg');
     expect(receipt.movementId, 'm1');
     expect(receipt.createdAt, DateTime.utc(2026, 9, 22, 14, 30, 5));
+
+    // v3: la cola conserva sus entradas, sin próximo intento ni error.
+    final entry = await db.select(db.syncQueue).getSingle();
+    expect(entry.recordId, 'm1');
+    expect(entry.nextAttemptAt, isNull);
+    expect(entry.lastError, isNull);
   });
 
   test('el esquema migrado es igual al de una instalación nueva', () async {

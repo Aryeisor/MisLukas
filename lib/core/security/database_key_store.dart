@@ -35,6 +35,12 @@ class DatabaseKeyStore {
   /// claves distintas.
   Future<String> getOrCreateKey() => _key ??= _loadOrCreate();
 
+  /// Hay una clave válida guardada (la base actual se puede leer).
+  Future<bool> hasStoredKey() async {
+    final stored = await _storage.read(key: storageKey);
+    return stored != null && isValidDatabaseKey(stored);
+  }
+
   /// Borra la clave (cerrar sesión o eliminar la cuenta, docs/08 §8.8.4).
   Future<void> deleteKey() async {
     _key = null;

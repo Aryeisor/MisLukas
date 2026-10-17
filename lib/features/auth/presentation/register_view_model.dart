@@ -33,15 +33,15 @@ class RegisterState {
   /// Correo de la cuenta creada; cuando existe se abre "Verifica tu correo".
   final String? submittedEmail;
 
-  PasswordRequirements get requirements =>
-      PasswordRequirements.check(password);
+  PasswordRequirements get requirements => PasswordRequirements.check(password);
 
   PasswordStrength get strength => passwordStrength(password);
 
   /// El indicador de fortaleza aparece al empezar a escribir.
   bool get showStrength => password.isNotEmpty;
 
-  String? get emailError => emailTouched && email.isNotEmpty && !isValidEmail(email)
+  String? get emailError =>
+      emailTouched && email.isNotEmpty && !isValidEmail(email)
       ? 'Ingresa un correo válido'
       : null;
 
@@ -123,7 +123,11 @@ class RegisterViewModel extends Notifier<RegisterState> {
     try {
       await ref
           .read(authRepositoryProvider)
-          .signUp(name: state.name.trim(), email: email, password: state.password);
+          .signUp(
+            name: state.name.trim(),
+            email: email,
+            password: state.password,
+          );
       if (!ref.mounted) return;
       state = state.copyWith(isSubmitting: false, submittedEmail: email);
     } on AuthFailureException catch (error) {

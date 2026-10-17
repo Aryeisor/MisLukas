@@ -28,8 +28,7 @@ class RegisterForm extends ConsumerWidget {
     });
 
     final failure = state.failure;
-    void comingSoon() =>
-        AppSnackbar.info(context, 'Disponible próximamente');
+    void comingSoon() => AppSnackbar.info(context, 'Disponible próximamente');
 
     return AutofillGroup(
       child: Column(

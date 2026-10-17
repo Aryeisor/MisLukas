@@ -62,6 +62,17 @@ abstract final class DateLabels {
     return '${_shortMonths[date.month - 1]} ${date.day}';
   }
 
+  /// Tiempo transcurrido desde [moment] hasta [now]: "hace un momento",
+  /// "hace 5 min", "hace 2 h", "hace 1 día", "hace 3 días".
+  static String timeAgo(DateTime moment, DateTime now) {
+    final elapsed = now.difference(moment);
+    if (elapsed.inMinutes < 1) return 'hace un momento';
+    if (elapsed.inHours < 1) return 'hace ${elapsed.inMinutes} min';
+    if (elapsed.inDays < 1) return 'hace ${elapsed.inHours} h';
+    final days = elapsed.inDays;
+    return days == 1 ? 'hace 1 día' : 'hace $days días';
+  }
+
   /// Indica si [date] cae en el mismo mes y año que [reference].
   static bool isSameMonth(DateTime date, DateTime reference) =>
       date.year == reference.year && date.month == reference.month;

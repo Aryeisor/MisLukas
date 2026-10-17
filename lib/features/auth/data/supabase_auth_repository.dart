@@ -67,8 +67,7 @@ class SupabaseAuthRepository implements AuthRepository {
     } on AuthException catch (error) {
       // Un correo ya registrado se trata como éxito: la pantalla siempre dice
       // "Verifica tu correo" y no revela qué correos tienen cuenta.
-      if (error.code == 'user_already_exists' ||
-          error.code == 'email_exists') {
+      if (error.code == 'user_already_exists' || error.code == 'email_exists') {
         return;
       }
       throw AuthFailureException(mapAuthException(error));
@@ -114,6 +113,17 @@ class SupabaseAuthRepository implements AuthRepository {
   Future<void> updatePassword({required String newPassword}) async {
     await _guard(() => _auth.updateUser(UserAttributes(password: newPassword)));
     await _signOut(SignOutScope.global);
+  }
+
+  @override
+  Future<void> reauthenticate({required String password}) {
+    final email = _auth.currentUser?.email;
+    if (email == null) {
+      throw const AuthFailureException(AuthFailure.unknown);
+    }
+    return _guard(
+      () => _auth.signInWithPassword(email: email, password: password),
+    );
   }
 
   @override

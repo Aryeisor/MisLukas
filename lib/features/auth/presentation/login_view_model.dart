@@ -31,7 +31,8 @@ class LoginState {
   /// Segundos de espera antes de poder intentar de nuevo; 0 si no hay espera.
   final int retrySeconds;
 
-  String? get emailError => emailTouched && email.isNotEmpty && !isValidEmail(email)
+  String? get emailError =>
+      emailTouched && email.isNotEmpty && !isValidEmail(email)
       ? 'Ingresa un correo válido'
       : null;
 

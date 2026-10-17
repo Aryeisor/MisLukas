@@ -32,11 +32,19 @@ abstract interface class AuthRepository {
 
   /// Verifica el código de recuperación. Si es correcto, crea una sesión
   /// temporal para cambiar la contraseña.
-  Future<void> verifyRecoveryCode({required String email, required String code});
+  Future<void> verifyRecoveryCode({
+    required String email,
+    required String code,
+  });
 
   /// Cambia la contraseña y cierra la sesión en todos los dispositivos,
   /// incluido este (RF-10).
   Future<void> updatePassword({required String newPassword});
+
+  /// Vuelve a verificar la contraseña del usuario con sesión, antes de una
+  /// acción delicada como eliminar la cuenta (docs/08 §8.9.4). Renueva la
+  /// sesión: el servidor sabe que la contraseña se verificó hace poco.
+  Future<void> reauthenticate({required String password});
 
   /// Cierra la sesión en este dispositivo.
   Future<void> signOut();

@@ -9,6 +9,7 @@ import 'package:mislukas/core/utils/clock.dart';
 import 'fake_auth_repository.dart';
 import 'pump_screen.dart';
 import 'test_database.dart';
+import 'test_session.dart';
 
 /// Contenedor con una base en memoria (sembrada con la demo si [seed]), el
 /// reloj de las pruebas y la usuaria de pruebas con sesión (o [auth]). Se
@@ -17,6 +18,7 @@ Future<(ProviderContainer, AppDatabase)> createTestContainer({
   bool seed = true,
   Clock? clock,
   FakeAuthRepository? auth,
+  TestSession? session,
   List<Override> overrides = const [],
 }) async {
   final db = openTestDatabase();
@@ -25,6 +27,7 @@ Future<(ProviderContainer, AppDatabase)> createTestContainer({
     overrides: [
       authOverride(auth),
       ...databaseOverrides(db, clock: clock),
+      ...(session ?? TestSession()).overrides(db),
       ...overrides,
     ],
     retry: (_, _) => null,

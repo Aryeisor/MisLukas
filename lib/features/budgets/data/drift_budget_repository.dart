@@ -30,12 +30,14 @@ class DriftBudgetRepository implements BudgetRepository {
   @override
   Future<Budget> save(Budget budget, {required DateTime at}) {
     return _db.transaction(() async {
-      // Incluye los eliminados: la combinación categoría y mes es única.
+      // Solo entre los no eliminados: un presupuesto eliminado no revive (la
+      // eliminación prevalece al sincronizar), se crea otro con id nuevo.
       final existing =
           await (_db.select(_db.budgets)..where(
                 (t) =>
                     t.categoryId.equals(budget.categoryId) &
-                    t.month.equalsValue(budget.month),
+                    t.month.equalsValue(budget.month) &
+                    t.deletedAt.isNull(),
               ))
               .getSingleOrNull();
 
@@ -62,7 +64,6 @@ class DriftBudgetRepository implements BudgetRepository {
         BudgetsCompanion(
           limitAmount: Value(budget.limitAmount),
           updatedAt: Value(at.toUtc()),
-          deletedAt: const Value(null),
           syncStatus: Value(syncStatusSqlValues[SyncStatus.pending]!),
         ),
       );
