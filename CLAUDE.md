@@ -285,7 +285,7 @@ Detalle completo en `docs/08-seguridad.md`.
 5. **Supabase**: autenticación, RLS, sincronización.
 6. **Funciones del dispositivo**: cámara, OCR, notificaciones, biometría.
 
-**Fase actual: 5**
+**Fase actual: 6**
 
 ## Comandos
 
