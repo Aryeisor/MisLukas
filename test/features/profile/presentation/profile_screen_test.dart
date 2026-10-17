@@ -113,7 +113,7 @@ void main() {
     await openProfile(tester, db);
     expect(find.byType(ProfileScreen), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(AppSecondaryButton, 'Cerrar sesión'));
+    await tapSignOut(tester);
     await tester.pumpAndSettle();
     expect(find.text('¿Cerrar sesión?'), findsOneWidget);
 
@@ -132,8 +132,7 @@ void main() {
   testWidgetsWithDatabase('Cancelar no cierra la sesión', (tester, db) async {
     await openProfile(tester, db);
 
-    await tester.tap(find.widgetWithText(AppSecondaryButton, 'Cerrar sesión'));
-    await tester.pumpAndSettle();
+    await tapSignOut(tester);
     await tester.tap(find.text('Cancelar'));
     await tester.pumpAndSettle();
 
@@ -148,7 +147,8 @@ void main() {
 
       expect(find.byType(ProfileScreen), findsOneWidget);
       await expectNoOverflowWhileScrolling(tester);
-      expect(find.text('Borrar todos los datos').hitTestable(), findsOneWidget);
+      // Se llega al final de la lista.
+      expect(find.text('Eliminar mi cuenta').hitTestable(), findsOneWidget);
     },
   );
   group('sincronización', () {
@@ -307,4 +307,22 @@ void main() {
       },
     );
   });
+}
+
+/// Toca "Cerrar sesión", que puede estar más abajo en la lista.
+Future<void> tapSignOut(WidgetTester tester) async {
+  final button = find.widgetWithText(AppSecondaryButton, 'Cerrar sesión');
+  await tester.scrollUntilVisible(
+    button,
+    200,
+    scrollable: find
+        .descendant(
+          of: find.byType(ProfileScreen),
+          matching: find.byType(Scrollable),
+        )
+        .first,
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(button);
+  await tester.pumpAndSettle();
 }

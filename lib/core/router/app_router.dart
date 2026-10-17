@@ -8,10 +8,12 @@ import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/password_recovery_flow.dart';
 import '../../features/auth/presentation/recover_password_screen.dart';
 import '../../features/auth/presentation/verify_email_screen.dart';
+import '../../features/budgets/presentation/budgets_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/movements/domain/entities/movement.dart';
 import '../../features/movements/presentation/confirm_movement_screen.dart';
 import '../../features/movements/presentation/confirm_movement_view_model.dart';
+import '../../features/movements/presentation/history/history_screen.dart';
 import '../../features/movements/presentation/movement_entry_method.dart';
 import '../../features/movements/presentation/new_movement_screen.dart';
 import '../../features/onboarding/presentation/welcome_screen.dart';
@@ -146,6 +148,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           mode: EditMovementMode(state.pathParameters[AppRoutes.idParam]!),
         ),
       ),
+      GoRoute(
+        path: AppRoutes.history,
+        builder: (context, state) => const HistoryScreen(),
+      ),
       // Se abre con push (WelcomeLauncher), encima de lo que esté visible.
       GoRoute(
         path: AppRoutes.welcome,
@@ -154,6 +160,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.deleteAccount,
         builder: (context, state) => const DeleteAccountScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.budgets,
+        builder: (context, state) => const BudgetsScreen(),
       ),
       if (kDebugMode)
         GoRoute(

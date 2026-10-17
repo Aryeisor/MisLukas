@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
-import '../../../../core/utils/date_formatter.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../domain/movement_text.dart';
-
-/// Antigüedad máxima de la fecha de un ingreso en el calendario.
-const int incomeDateMaxYearsBack = 5;
+import 'movement_date_field.dart';
 
 /// Campos del formulario de un ingreso: valor, descripción y, si se recibe
 /// [date], la fecha. Se usa en Nuevo movimiento, al editar un ingreso y en la
@@ -79,10 +76,11 @@ class IncomeFormFields extends StatelessWidget {
         if (date != null) ...[
           const SizedBox(height: AppSpacing.lg),
           AppCard(
-            child: _DateField(
+            child: MovementDateField(
               date: date!,
               today: today!,
               onChanged: onDateChanged!,
+              pickerTitle: 'Fecha del ingreso',
             ),
           ),
         ],
@@ -124,59 +122,6 @@ class _DescriptionFieldState extends State<_DescriptionField> {
       maxLength: movementTextMaxLength,
       textInputAction: TextInputAction.done,
       onChanged: widget.onChanged,
-    );
-  }
-}
-
-/// Fecha del ingreso: un botón con el día elegido que abre el calendario del
-/// sistema, hasta hoy.
-class _DateField extends StatelessWidget {
-  const _DateField({
-    required this.date,
-    required this.today,
-    required this.onChanged,
-  });
-
-  final DateTime date;
-  final DateTime today;
-  final ValueChanged<DateTime> onChanged;
-
-  Future<void> _pick(BuildContext context) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: date.isAfter(today) ? today : date,
-      firstDate: DateTime(today.year - incomeDateMaxYearsBack),
-      lastDate: today,
-      helpText: 'Fecha del ingreso',
-    );
-    if (picked != null) onChanged(picked);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final label = DateLabels.longDay(date, today);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const AppFieldLabel('Fecha'),
-        const SizedBox(height: AppSpacing.sm),
-        // La tarjeta une esta etiqueta con "FECHA": el lector dice "Fecha,
-        // Hoy, 22 de septiembre, botón, toca para cambiarla".
-        Semantics(
-          label: label,
-          hint: 'Toca para cambiarla',
-          button: true,
-          excludeSemantics: true,
-          onTap: () => _pick(context),
-          child: AppSecondaryButton(
-            label: label,
-            icon: Icons.calendar_today_outlined,
-            onPressed: () => _pick(context),
-          ),
-        ),
-      ],
     );
   }
 }

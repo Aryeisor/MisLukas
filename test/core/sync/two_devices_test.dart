@@ -2,6 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mislukas/core/database/seed/demo_seed.dart';
 import 'package:mislukas/core/sync/sync_service.dart';
 import 'package:mislukas/features/budgets/data/drift_budget_repository.dart';
+import 'package:mislukas/features/budgets/domain/entities/budget.dart';
+import 'package:mislukas/features/budgets/domain/entities/default_categories.dart';
+import 'package:mislukas/features/budgets/domain/usecases/carry_over_budgets.dart';
 import 'package:mislukas/features/movements/data/drift_movement_repository.dart';
 import 'package:mislukas/features/onboarding/data/drift_onboarding_repository.dart';
 
@@ -152,6 +155,68 @@ void main() {
         final active = await device.activeBudgets();
         expect(active.single.id, newer, reason: device.ids.prefix);
         expect(await device.queue(), isEmpty, reason: device.ids.prefix);
+      }
+    },
+  );
+
+  test(
+    'los dos copian el mismo mes sin conexión: queda uno por categoría',
+    () async {
+      await phone.saveBudget(800000);
+      await phone.budgets.save(
+        Budget(
+          id: phone.ids.newId(),
+          categoryId: DefaultCategory.transporte.id,
+          month: DateTime(2026, 9),
+          limitAmount: 200000,
+        ),
+        at: phone.clock.now(),
+      );
+      await phone.sync();
+      await emulator.sync();
+      expect(await emulator.activeBudgets(), hasLength(2));
+
+      // 1 de octubre, los dos sin conexión: cada uno copia por su cuenta.
+      server.offline = true;
+      phone.clock.current = DateTime(2026, 10, 1, 8);
+      emulator.clock.current = DateTime(2026, 10, 1, 8, 2);
+      CarryOverBudgets carryOverOn(SyncDevice device) => CarryOverBudgets(
+        budgets: device.budgets,
+        clock: device.clock,
+        ids: device.ids,
+      );
+      for (final device in [phone, emulator]) {
+        await device.sync();
+        expect(await carryOverOn(device)(), hasLength(2));
+      }
+
+      server.offline = false;
+      for (var round = 0; round < 2; round++) {
+        await phone.sync();
+        await emulator.sync();
+      }
+
+      final october = DateTime(2026, 10);
+      final serverActive = server
+          .rows('presupuestos')
+          .where((r) => r['eliminado_en'] == null && r['mes'] == '2026-10-01')
+          .toList();
+      expect(serverActive, hasLength(2));
+      expect(serverActive.map((r) => r['categoria_id']).toSet(), {
+        DefaultCategory.mercado.id,
+        DefaultCategory.transporte.id,
+      });
+      final serverIds = serverActive.map((r) => r['id']).toSet();
+      for (final device in [phone, emulator]) {
+        final active = await device.budgets.getForMonth(october);
+        expect(
+          active.map((b) => b.id).toSet(),
+          serverIds,
+          reason: device.ids.prefix,
+        );
+        expect(await device.queue(), isEmpty, reason: device.ids.prefix);
+        // Las copias perdedoras quedan como lápidas: no se copia otra vez.
+        expect(await carryOverOn(device)(), isEmpty, reason: device.ids.prefix);
       }
     },
   );

@@ -6,6 +6,7 @@ import '../../../core/router/app_routes.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../auth/presentation/widgets/auth_flow_scaffold.dart';
+import '../../budgets/presentation/widgets/budget_limit_field.dart';
 import '../../movements/presentation/confirm_movement_view_model.dart';
 import '../../movements/presentation/widgets/income_form_fields.dart';
 import 'welcome_controller.dart';
@@ -166,7 +167,6 @@ class WelcomeScreen extends ConsumerWidget {
     WelcomeState state,
   ) {
     final viewModel = ref.read(welcomeViewModelProvider.notifier);
-    final textTheme = Theme.of(context).textTheme;
     return [
       for (final (index, category) in expenseCategoryOptions.indexed) ...[
         if (index > 0) const SizedBox(height: AppSpacing.md),
@@ -174,19 +174,11 @@ class WelcomeScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  CategoryIcon(kind: category),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Text(category.label, style: textTheme.titleSmall),
-                  ),
-                ],
-              ),
+              BudgetCategoryHeader(category: category),
               const SizedBox(height: AppSpacing.md),
-              AppAmountField(
+              BudgetLimitField(
                 key: ValueKey(category),
-                label: 'Límite mensual de ${category.label.toLowerCase()}',
+                category: category,
                 initialValue: state.budgets[category],
                 onChanged: (limit) => viewModel.setBudget(category, limit),
               ),

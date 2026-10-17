@@ -71,7 +71,11 @@ void main() {
         ),
         matching: find.byType(TextField),
       );
-      await tester.ensureVisible(noteField);
+      await tester.scrollUntilVisible(
+        noteField,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.enterText(noteField, 'Taxi');
       await tester.pump();
 
@@ -344,7 +348,11 @@ void main() {
     await openTab(tester, 'Perfil');
 
     final clear = find.text('Borrar todos los datos');
-    await tester.ensureVisible(clear);
+    await tester.scrollUntilVisible(
+      clear,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     await tester.tap(clear);
     await tester.pumpAndSettle();

@@ -13,6 +13,7 @@ import '../../../core/widgets/widgets.dart';
 import 'confirm_movement_view_model.dart';
 import 'movement_entry_method.dart';
 import 'widgets/income_form_fields.dart';
+import 'widgets/movement_date_field.dart';
 
 /// Confirma los datos (foto), Registra tu gasto (manual) o Editar movimiento:
 /// pantalla 7, fig. 5.6 y 5.7. Al editar un ingreso muestra su formulario
@@ -199,6 +200,15 @@ class ConfirmMovementScreen extends ConsumerWidget {
                         onSelected: viewModel.setCategory,
                       ),
                     ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppCard(
+                  child: MovementDateField(
+                    date: state.date ?? ref.watch(clockProvider).today(),
+                    today: ref.watch(clockProvider).today(),
+                    onChanged: viewModel.setDate,
+                    pickerTitle: 'Fecha del gasto',
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),

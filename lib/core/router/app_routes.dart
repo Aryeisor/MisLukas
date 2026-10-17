@@ -18,6 +18,9 @@ abstract final class AppRoutes {
   /// Eliminar la cuenta (RF-48), a pantalla completa.
   static const String deleteAccount = '/profile/delete-account';
 
+  /// Presupuestos del mes (RF-52), a pantalla completa. Se abre desde Perfil.
+  static const String budgets = '/profile/budgets';
+
   /// Bienvenida para usuarios nuevos (RF-51), a pantalla completa.
   static const String welcome = '/welcome';
 
@@ -36,6 +39,9 @@ abstract final class AppRoutes {
     queryParameters: {typeParam: incomeType},
   ).toString();
   static const String confirmMovement = '/movements/confirm';
+
+  /// Historial de movimientos (RF-22), a pantalla completa.
+  static const String history = '/movements/history';
 
   /// Edición de un movimiento existente (RF-23), a pantalla completa.
   static const String editMovement = '/movements/:$idParam/edit';

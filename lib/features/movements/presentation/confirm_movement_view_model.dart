@@ -97,7 +97,7 @@ class ConfirmMovementState {
   /// Descripción del ingreso ("Salario"). Los gastos no la editan.
   final String description;
 
-  /// Día del ingreso. Null en los gastos, que usan la fecha de hoy.
+  /// Día del movimiento (RF-19). Por defecto, hoy.
   final DateTime? date;
 
   /// El movimiento que se edita es un ingreso. Al editar no cambia el tipo.
@@ -179,9 +179,10 @@ class ConfirmMovementViewModel extends AsyncNotifier<ConfirmMovementState> {
           mode: mode,
           amount: demoReceiptTotal,
           category: demoReceiptCategory,
+          date: ref.read(clockProvider).today(),
         ),
       CreateMovementMode(method: MovementEntryMethod.manual) =>
-        ConfirmMovementState(mode: mode),
+        ConfirmMovementState(mode: mode, date: ref.read(clockProvider).today()),
       CreateIncomeMode() => ConfirmMovementState(
         mode: mode,
         category: CategoryKind.ingreso,
@@ -200,7 +201,7 @@ class ConfirmMovementViewModel extends AsyncNotifier<ConfirmMovementState> {
       category: categoryKindForId(movement.categoryId),
       note: movement.note ?? '',
       description: movement.description,
-      date: movement.isIncome ? movement.date : null,
+      date: movement.date,
       isIncome: movement.isIncome,
     );
   }
@@ -225,8 +226,8 @@ class ConfirmMovementViewModel extends AsyncNotifier<ConfirmMovementState> {
   void setDescription(String description) =>
       _update((s) => s.copyWith(description: description));
 
-  /// Cambia el día del ingreso. Una fecha futura no se acepta (el calendario
-  /// tampoco la ofrece).
+  /// Cambia el día del movimiento. Una fecha futura no se acepta (el
+  /// calendario tampoco la ofrece).
   void setDate(DateTime date) {
     final day = dateOnly(date);
     if (day.isAfter(ref.read(clockProvider).today())) return;
@@ -258,6 +259,7 @@ class ConfirmMovementViewModel extends AsyncNotifier<ConfirmMovementState> {
                     ? demoReceiptMerchantName
                     : '',
                 note: note.isEmpty ? null : note,
+                date: current.date,
               );
         case CreateIncomeMode():
           // Vacía: se usa el nombre de la categoría.
@@ -286,6 +288,7 @@ class ConfirmMovementViewModel extends AsyncNotifier<ConfirmMovementState> {
                 id: movementId,
                 amount: amount,
                 categoryId: category.categoryId,
+                date: current.date,
                 note: () => note.isEmpty ? null : note,
               );
       }

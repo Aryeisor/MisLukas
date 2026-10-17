@@ -20,6 +20,9 @@ enum DomainError {
 
   /// La fecha del movimiento es posterior a hoy.
   futureDate,
+
+  /// El presupuesto no existe o ya fue quitado.
+  budgetNotFound,
 }
 
 class DomainException implements Exception {

@@ -124,6 +124,15 @@ class ProfileScreen extends ConsumerWidget {
               title: 'Perfil completo en una próxima versión',
             ),
             const SizedBox(height: AppSpacing.xl),
+            // Grupo "Preferencias" de la especificación (docs/05 pantalla 10).
+            const AppSectionHeader(title: 'Preferencias'),
+            const SizedBox(height: AppSpacing.sm),
+            AppSecondaryButton(
+              label: 'Presupuestos',
+              icon: Icons.account_balance_wallet_outlined,
+              onPressed: () => context.push(AppRoutes.budgets),
+            ),
+            const SizedBox(height: AppSpacing.xl),
             AppSecondaryButton(
               label: state.isSigningOut ? 'Cerrando sesión…' : 'Cerrar sesión',
               icon: Icons.logout,

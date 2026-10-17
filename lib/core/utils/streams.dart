@@ -36,3 +36,30 @@ Stream<(A, B)> combineLatest<A, B>(Stream<A> first, Stream<B> second) {
   );
   return controller.stream;
 }
+
+/// Por cada valor de [source], escucha el stream que devuelve [project] y
+/// emite sus valores; al llegar otro valor, deja el stream anterior.
+Stream<R> switchMap<T, R>(Stream<T> source, Stream<R> Function(T) project) {
+  late StreamController<R> controller;
+  StreamSubscription<T>? sourceSub;
+  StreamSubscription<R>? innerSub;
+
+  controller = StreamController<R>(
+    onListen: () {
+      sourceSub = source.listen(
+        (value) {
+          innerSub?.cancel();
+          innerSub = project(value)
+              .listen(controller.add, onError: controller.addError);
+        },
+        // Si [source] termina, el último stream interno sigue emitiendo.
+        onError: controller.addError,
+      );
+    },
+    onCancel: () async {
+      await sourceSub?.cancel();
+      await innerSub?.cancel();
+    },
+  );
+  return controller.stream;
+}

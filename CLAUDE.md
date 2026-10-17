@@ -107,7 +107,22 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
   - Omitir el paso 1 pasa al 2. Terminar u omitir el paso 2, o Volver en el paso 1, la marca como completada.
   - `DemoSeed.load()` también marca la bienvenida; `clearAll()` no la toca.
   - Limitación conocida: la marca es local. Quien la omitió sin registrar nada la ve de nuevo en otro celular. No hay columnas en Supabase para esto.
-- Los presupuestos son por mes y no se copian al siguiente: el día 1 el usuario queda sin presupuestos. Se resuelve en la 5E, junto con el historial (RF-22) y la fecha del gasto (RF-19).
+- Historial (5E, RF-22, `movements/presentation/history/`):
+  - Ruta `/movements/history`, desde "Ver todos" de Inicio. Agrupado por mes, del más reciente al más antiguo, con `MovementTile` y el total de ingresos y gastos de cada mes.
+  - Filtro `AppSegmentedTabs` Todos | Gastos | Ingresos y `AppChipGroup<CategoryKind?>` con "Todas" y las categorías de gasto (ocultos con Ingresos). RF-22 pide "por mes y categoría": el mes lo da la agrupación.
+  - Carga por ventana de meses: `MovementRepository.watchMonthSummaries` agrupa en SQL (`substr(fecha, 1, 7)`) para saber qué meses hay, y solo se leen los movimientos de los 3 más recientes; al llegar al final se suman 3 (`WatchMovementHistory`, `switchMap` en `core/utils/streams.dart`). Los totales del encabezado se calculan con los movimientos cargados. `watchBetween` acepta un `MovementFilter` (tipo y categoría).
+- Presupuestos (5E, RF-52):
+  - Pantalla `/profile/budgets` (`BudgetsScreen`), desde Perfil › Preferencias › "Presupuestos" (docs/05 pantalla 10).
+  - Una tarjeta por categoría de gasto con gastado, límite, `AppVariationBar` (azul, amarilla desde 75%, roja desde 100%) y el porcentaje escrito. Al tocarla se edita en la misma tarjeta (una a la vez): Guardar (`SetBudget`), Cancelar y Quitar (`RemoveBudget`, con confirmación).
+  - `BudgetCategoryHeader` y `BudgetLimitField` (`budgets/presentation/widgets/`) los comparten la bienvenida (paso 2) y Presupuestos.
+  - `BudgetRepository` tiene `findById`, `remove` (borrado lógico con entrada `eliminar` en la cola) y `carryOver`. `DomainError.budgetNotFound`.
+- Continuidad entre meses (5E, RF-53):
+  - `BudgetRepository.carryOver`, en una transacción: si el mes actual tiene alguna fila de presupuesto (activa o eliminada) no hace nada; si no, toma el último mes anterior con alguna fila (también eliminadas) y copia sus activos con ids nuevos, mismos límites, pendientes y con su entrada `crear` en la cola. Así es idempotente, un presupuesto quitado en el mes no vuelve y, si el usuario los quitó todos, el mes siguiente queda vacío.
+  - `BudgetCarryOverController` corre `CarryOverBudgets` cada vez que termina un intento de sincronización (`isSyncing` pasa a false), salga bien o no, con la sesión `ready`. Con conexión el pull ya trajo lo que copió otro celular. Se mantiene vivo en `SyncTriggers` (`app.dart`).
+  - Si dos celulares copian el mismo mes sin conexión, la resolución de "único entre activos" de la 5C deja uno por categoría; las copias perdedoras quedan como lápidas y no se vuelve a copiar.
+  - Las alertas no cambian: se evalúan con los presupuestos y gastos de cada mes, así que el mes nuevo empieza sin alertas.
+- Fecha del gasto (5E, RF-19): `MovementDateField` (`movements/presentation/widgets/`) es el selector de fecha del ingreso y del gasto (AppFieldLabel + AppSecondaryButton + `showDatePicker` con `lastDate` = hoy). El gasto (foto, manual y edición) empieza con hoy (`ConfirmMovementState.date`) y se guarda con `RegisterMovement`/`UpdateMovement(date)`. Disponible, Reportes, alertas y simulador ya filtran por `fecha`. En Supabase no hay check de fecha futura (tampoco para el ingreso de la 5D): la validación es solo del cliente.
+- Fecha simulada solo en desarrollo: `clockProvider` usa `MonthShiftedClock` si `debugMonthOffsetProvider` es distinto de 0 y `kDebugMode`. Lo controlan "Adelantar un mes" y "Volver a la fecha real" en `DemoDataActions`; el desfase vive en memoria. Mientras está adelantada, todo lo que se guarda lleva fechas y `actualizado_en` futuros (que ganarían conflictos reales): solo se usa con una cuenta de prueba que se elimina al final.
 
 ## Stack
 
@@ -202,7 +217,7 @@ En `lib/core/widgets/`. Importar siempre desde `package:mislukas/core/widgets/wi
 - `AppOfflineIndicator`: aviso discreto de "Sin conexión".
 - `AppSnackbar`: `AppSnackbar.success` / `AppSnackbar.error` / `AppSnackbar.info` para mensajes breves.
 - `showAppConfirmDialog`: diálogo de confirmación con "Cancelar" y una acción (en rojo con `destructive`); devuelve true si el usuario confirma.
-- `DemoDataActions` (`core/widgets/dev/`): "Cargar datos de demostración" y "Borrar todos los datos"; solo se muestra en modo desarrollo.
+- `DemoDataActions` (`core/widgets/dev/`): "Cargar datos de demostración", "Borrar todos los datos" y la fecha simulada ("Adelantar un mes"); solo se muestra en modo desarrollo.
 - `AppBottomNav`: barra inferior con Inicio, Reportes, Simular y Perfil.
 - `AppDonutChart` / `AppChartSegment`: gráfico de dona (CustomPainter) con contenido central y descripción para lectores de pantalla.
 - `AppBarComparisonChart` / `AppBarGroup`: barras verticales agrupadas de dos series (gris y primary) con leyenda; las etiquetas del eje no se enciman.

@@ -131,7 +131,7 @@ class _HomeDataView extends StatelessWidget {
         AppSectionHeader(
           title: 'Últimos movimientos',
           actionLabel: 'Ver todos',
-          onAction: () => AppSnackbar.info(context, 'Disponible próximamente'),
+          onAction: () => context.push(AppRoutes.history),
         ),
         const SizedBox(height: AppSpacing.sm),
         for (final movement in data.latestMovements) ...[

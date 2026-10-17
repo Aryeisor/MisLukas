@@ -18,13 +18,17 @@ La pantalla de inicio responde a la pregunta que el usuario se hace con más fre
 
 Es la funcionalidad central del MVP. El usuario puede fotografiar un recibo para que la aplicación extraiga el valor total y sugiera una categoría, o registrar el movimiento a mano cuando no tiene recibo. En ambos casos puede revisar y corregir los datos antes de guardar. En la misma pantalla, un selector Gasto | Ingreso permite registrar un ingreso (salario, prima, trabajos independientes) con su valor, descripción y fecha, sin elegir categoría.
 
+**Historial de movimientos.**
+
+Desde "Ver todos" en Inicio, el usuario consulta todos sus movimientos agrupados por mes, del más reciente al más antiguo, con el total de ingresos y gastos de cada mes. Puede filtrarlos por tipo (gastos o ingresos) y por categoría, y tocar cualquiera para editarlo o eliminarlo, aunque ya no aparezca en los últimos movimientos.
+
 **Bienvenida para usuarios nuevos.**
 
 La primera vez que un usuario sin datos entra a la aplicación, una bienvenida de dos pasos le pregunta con cuánto dinero cuenta este mes y, si quiere, le permite definir presupuestos por categoría. Así el disponible y las alertas funcionan desde el primer gasto. Se puede omitir y no vuelve a aparecer.
 
 **Categorías y alertas de presupuesto.**
 
-La aplicación trae un conjunto de categorías predeterminadas (Mercado, Transporte, Ocio, Servicios, Restaurantes, Otros) y permite asignar un presupuesto mensual a cada una. Cuando el gasto de una categoría se acerca al límite, se muestra una alerta en la pantalla de inicio y, si el usuario lo permite, una notificación en el celular.
+La aplicación trae un conjunto de categorías predeterminadas (Mercado, Transporte, Ocio, Servicios, Restaurantes, Otros) y permite asignar un presupuesto mensual a cada una desde Perfil › Presupuestos, donde se ve cuánto se ha gastado de cada límite. Los presupuestos continúan de un mes al siguiente con los mismos límites. Cuando el gasto de una categoría se acerca al límite, se muestra una alerta en la pantalla de inicio y, si el usuario lo permite, una notificación en el celular.
 
 **Reportes por categoría y comparación mensual.**
 
@@ -46,8 +50,9 @@ Tabla descriptiva de cada funcionalidad de cada pantalla con su respectiva histo
 | Dashboard con disponible del mes          | Inicio                          | HU-08                      |
 | Registro por foto o manual                | Nuevo movimiento, Confirma los datos | HU-05, HU-06          |
 | Registro de ingresos                      | Nuevo movimiento                | HU-06                      |
+| Historial de movimientos                  | Historial                       | HU-06                      |
 | Bienvenida para usuarios nuevos           | Bienvenida                      | HU-11                      |
-| Categorías y alertas de presupuesto       | Inicio                          | HU-08                      |
+| Categorías y alertas de presupuesto       | Inicio, Perfil › Presupuestos   | HU-08                      |
 | Reportes y comparación mensual            | Reportes                        | HU-09                      |
 | Simulador de ahorro                       | Simulador                       | HU-10                      |
 | Funcionamiento offline                    | Transversal a todas             | HU-07                      |
@@ -98,10 +103,10 @@ Los requisitos funcionales describen lo que el sistema debe hacer. Se agrupan po
 | RF-16 | El sistema debe sugerir una categoría a partir del nombre del comercio detectado en el recibo.                                                    | Should    | HU-05 |
 | RF-17 | El sistema debe permitir revisar y editar el valor, la categoría y la nota antes de guardar el movimiento.                                        | Must      | HU-05 |
 | RF-18 | El sistema debe informar al usuario cuando no logre leer el recibo y permitirle ingresar el valor manualmente.                                    | Must      | HU-05 |
-| RF-19 | El sistema debe permitir registrar manualmente un gasto o un ingreso con valor, categoría, fecha y nota opcional.                                 | Must      | HU-06 |
+| RF-19 | El sistema debe permitir registrar manualmente un gasto o un ingreso con valor, categoría, fecha y nota opcional. *Implementado en la Fase 5E: el gasto (manual o por foto) y el ingreso tienen fecha, por defecto hoy y nunca futura, también al editar.* | Must      | HU-06 |
 | RF-20 | El sistema debe rechazar valores vacíos, iguales a cero o negativos.                                                                              | Must      | HU-06 |
 | RF-21 | El sistema debe mostrar los últimos movimientos en la pantalla de inicio, ordenados del más reciente al más antiguo.                              | Must      | HU-06 |
-| RF-22 | El sistema debe permitir consultar el historial completo de movimientos y filtrarlo por mes y categoría.                                          | Should    | HU-06 |
+| RF-22 | El sistema debe permitir consultar el historial completo de movimientos y filtrarlo por mes y categoría. *Implementado en la Fase 5E: agrupado por mes, con filtro por tipo (gastos o ingresos) y por categoría de gasto.* | Should    | HU-06 |
 | RF-23 | El sistema debe permitir editar y eliminar un movimiento registrado.                                                                              | Must      | HU-06 |
 | RF-24 | El sistema debe guardar todo movimiento primero en la base de datos local, con estado "pendiente de sincronizar" si no hay conexión.              | Must      | HU-07 |
 | RF-25 | El sistema debe sincronizar automáticamente los movimientos pendientes cuando detecte conexión a internet.                                        | Must      | HU-07 |
@@ -118,6 +123,8 @@ Los requisitos funcionales describen lo que el sistema debe hacer. Se agrupan po
 | RF-30 | El sistema debe mostrar una alerta en la pantalla de inicio cuando el gasto de una categoría alcance el 75% de su presupuesto, indicando el porcentaje usado y el monto restante. | Must      | HU-08 |
 | RF-31 | El sistema debe mostrar una alerta distinta cuando el gasto de una categoría supere el 100% de su presupuesto.                                                                    | Should    | HU-08 |
 | RF-32 | El sistema debe enviar una notificación local al generarse una alerta, si el usuario lo ha permitido.                                                                             | Should    | HU-08 |
+| RF-52 | El sistema debe mostrar, para cada categoría de gasto, el presupuesto del mes actual con lo gastado, el límite y el porcentaje usado, y permitir crearlo, cambiar el límite (un valor entero mayor que cero) o quitarlo. | Must      | HU-08 |
+| RF-53 | El sistema debe continuar los presupuestos al empezar un mes: si el mes no tiene ninguno, copia con los mismos límites los del último mes que tuvo presupuestos. La copia ocurre una sola vez por mes, no revive un presupuesto que el usuario quitó en el mes y no copia nada si en el último mes el usuario los quitó todos. Las alertas del 75% y del 100% se evalúan por mes. | Must      | HU-08 |
 
 4.3.4 Requerimientos funcionales del módulo de reportes
 

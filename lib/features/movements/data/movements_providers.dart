@@ -10,6 +10,7 @@ import '../domain/usecases/register_income.dart';
 import '../domain/usecases/register_movement.dart';
 import '../domain/usecases/update_movement.dart';
 import '../domain/usecases/watch_month_summary.dart';
+import '../domain/usecases/watch_movement_history.dart';
 import '../domain/usecases/watch_recent_movements.dart';
 import 'drift_movement_repository.dart';
 
@@ -52,6 +53,11 @@ final getMovementProvider = Provider<GetMovement>(
 final watchRecentMovementsProvider = Provider<WatchRecentMovements>(
   (ref) =>
       WatchRecentMovements(movements: ref.watch(movementRepositoryProvider)),
+);
+
+final watchMovementHistoryProvider = Provider<WatchMovementHistory>(
+  (ref) =>
+      WatchMovementHistory(movements: ref.watch(movementRepositoryProvider)),
 );
 
 final watchMonthSummaryProvider = Provider<WatchMonthSummary>(

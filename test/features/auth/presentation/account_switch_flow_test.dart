@@ -7,6 +7,7 @@ import 'package:mislukas/features/auth/presentation/login_screen.dart';
 import 'package:mislukas/features/auth/presentation/verify_email_screen.dart';
 import 'package:mislukas/features/auth/presentation/widgets/foreign_data_prompt.dart';
 import 'package:mislukas/features/home/presentation/home_screen.dart';
+import 'package:mislukas/features/profile/presentation/profile_screen.dart';
 
 import '../../../helpers/fake_auth_repository.dart';
 import '../../../helpers/pump_screen.dart';
@@ -57,7 +58,19 @@ void main() {
   /// falso está en línea).
   Future<void> signOutFromProfile(WidgetTester tester) async {
     await openTab(tester, 'Perfil');
-    await tester.tap(find.widgetWithText(AppSecondaryButton, 'Cerrar sesión'));
+    final signOut = find.widgetWithText(AppSecondaryButton, 'Cerrar sesión');
+    await tester.scrollUntilVisible(
+      signOut,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ProfileScreen),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(signOut);
     await tester.pumpAndSettle();
     await tester.tap(dialogButton('Cerrar sesión'));
     await tester.pumpAndSettle();
