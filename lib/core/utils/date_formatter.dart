@@ -62,6 +62,32 @@ abstract final class DateLabels {
     return '${_shortMonths[date.month - 1]} ${date.day}';
   }
 
+  /// Día completo relativo a [today]: "Hoy, 17 de octubre",
+  /// "Ayer, 16 de octubre", "3 de septiembre" o, si es de otro año,
+  /// "3 de septiembre de 2025".
+  static String longDay(DateTime date, DateTime today) {
+    final day = DateTime(date.year, date.month, date.day);
+    final reference = DateTime(today.year, today.month, today.day);
+    final difference = reference.difference(day).inDays;
+    final dayMonth = '${date.day} de ${monthName(date)}';
+
+    if (difference == 0) return 'Hoy, $dayMonth';
+    if (difference == 1) return 'Ayer, $dayMonth';
+    if (date.year != today.year) return '$dayMonth de ${date.year}';
+    return dayMonth;
+  }
+
+  /// Tiempo transcurrido desde [moment] hasta [now]: "hace un momento",
+  /// "hace 5 min", "hace 2 h", "hace 1 día", "hace 3 días".
+  static String timeAgo(DateTime moment, DateTime now) {
+    final elapsed = now.difference(moment);
+    if (elapsed.inMinutes < 1) return 'hace un momento';
+    if (elapsed.inHours < 1) return 'hace ${elapsed.inMinutes} min';
+    if (elapsed.inDays < 1) return 'hace ${elapsed.inHours} h';
+    final days = elapsed.inDays;
+    return days == 1 ? 'hace 1 día' : 'hace $days días';
+  }
+
   /// Indica si [date] cae en el mismo mes y año que [reference].
   static bool isSameMonth(DateTime date, DateTime reference) =>
       date.year == reference.year && date.month == reference.month;

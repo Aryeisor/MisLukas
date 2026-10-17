@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/app_routes.dart';
+import '../../../core/sync/sync_controller.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/widgets/widgets.dart';
@@ -17,10 +18,14 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(homeViewModelProvider);
     void openNewMovement() => context.push(AppRoutes.newMovement);
+    // Deslizar hacia abajo sincroniza con la nube.
+    Future<void> refresh() =>
+        ref.read(syncControllerProvider.notifier).syncNow();
 
     final content = switch (state) {
       HomeLoading() => const Center(child: CircularProgressIndicator()),
       HomeError(:final message) => ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
         children: [
           AppBanner(
@@ -31,6 +36,7 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       HomeEmpty(:final monthLabel, :final userName) => ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
         children: [
           _Header(monthLabel: monthLabel, userName: userName),
@@ -38,8 +44,10 @@ class HomeScreen extends ConsumerWidget {
           AppEmptyState(
             icon: Icons.receipt_long_outlined,
             title: 'Aún no tienes movimientos este mes',
-            description: 'Registra tu primer gasto para ver en qué se va tu dinero.',
-            actionLabel: 'Registrar mi primer gasto',
+            description:
+                'Registra tu primer gasto o ingreso para ver en qué se va '
+                'tu dinero.',
+            actionLabel: 'Registrar un movimiento',
             onAction: openNewMovement,
           ),
         ],
@@ -52,7 +60,11 @@ class HomeScreen extends ConsumerWidget {
         bottom: false,
         child: Column(
           children: [
-            Expanded(child: content),
+            Expanded(
+              child: state is HomeLoading
+                  ? content
+                  : RefreshIndicator(onRefresh: refresh, child: content),
+            ),
             // Botón fijo sobre la barra inferior; la lista termina antes de él.
             if (state is HomeData)
               Padding(
@@ -63,7 +75,7 @@ class HomeScreen extends ConsumerWidget {
                   AppSpacing.md,
                 ),
                 child: AppPrimaryButton(
-                  label: 'Nuevo gasto',
+                  label: 'Nuevo movimiento',
                   icon: Icons.add,
                   onPressed: openNewMovement,
                 ),
@@ -85,6 +97,7 @@ class _HomeDataView extends StatelessWidget {
     final alert = data.budgetAlert;
 
     return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.screenPadding,
         AppSpacing.screenPadding,
@@ -118,7 +131,7 @@ class _HomeDataView extends StatelessWidget {
         AppSectionHeader(
           title: 'Últimos movimientos',
           actionLabel: 'Ver todos',
-          onAction: () => AppSnackbar.info(context, 'Disponible próximamente'),
+          onAction: () => context.push(AppRoutes.history),
         ),
         const SizedBox(height: AppSpacing.sm),
         for (final movement in data.latestMovements) ...[
@@ -128,6 +141,7 @@ class _HomeDataView extends StatelessWidget {
             category: movement.category,
             dateLabel: movement.dateLabel,
             amount: movement.amount,
+            isPendingSync: movement.isPendingSync,
             onTap: () => context.push(AppRoutes.editMovementWith(movement.id)),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -157,7 +171,10 @@ class _Header extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs / 2),
               Semantics(
                 header: true,
-                child: Text('Hola, $userName 👋', style: textTheme.headlineSmall),
+                child: Text(
+                  userName.isEmpty ? 'Hola 👋' : 'Hola, $userName 👋',
+                  style: textTheme.headlineSmall,
+                ),
               ),
             ],
           ),
@@ -193,4 +210,3 @@ class _BudgetAlertBanner extends StatelessWidget {
     );
   }
 }
-

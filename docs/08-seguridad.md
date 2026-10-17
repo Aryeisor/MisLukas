@@ -143,7 +143,9 @@ Ambos tokens se guardan **exclusivamente** en el almacenamiento seguro del siste
 MisLukas distingue dos niveles de "cierre":
 
 - **Bloqueo local por inactividad.** Si la app pasa más de cinco minutos en segundo plano, se bloquea y exige biometría o PIN para volver a mostrar información (RNF-08). La sesión con el servidor sigue activa, así que el usuario no tiene que volver a escribir su contraseña.
-- **Cierre de sesión completo.** Ocurre cuando el usuario lo solicita, cuando falla cinco veces el PIN, cuando se cambia la contraseña desde otro dispositivo o cuando la sesión se revoca en el servidor. En ese caso se eliminan los tokens, la base local, las imágenes y la clave de cifrado del dispositivo, y para volver a entrar se necesita el correo y la contraseña.
+- **Cierre de sesión completo.** Ocurre cuando el usuario lo solicita, cuando falla cinco veces el PIN, cuando se cambia la contraseña desde otro dispositivo o cuando la sesión se revoca en el servidor. En todos los casos se eliminan los tokens y para volver a entrar se necesita el correo y la contraseña.
+  - Si lo pide el usuario o falla cinco veces el PIN, también se eliminan la base local, las imágenes y la clave de cifrado del dispositivo (8.8.4).
+  - Si la sesión se cierra sin que el usuario lo pida (revocada en el servidor o contraseña cambiada en otro dispositivo), la base local se conserva cifrada para no perder los cambios pendientes (6.6.4). La app guarda en el almacenamiento seguro qué usuario es el dueño de esos datos. Mientras no haya sesión, no se muestran. Si vuelve a entrar el mismo usuario, se envían; si entra otro, se le avisa y se borran antes de abrir la base.
 
 ## 8.3 Registro
 
@@ -254,7 +256,7 @@ La aplicación incluye la URL del proyecto y la **clave pública** de Supabase, 
 Supabase también ofrece una **clave de servicio** (service_role), pensada para procesos administrativos en servidores de confianza. Esta clave **ignora todas las políticas de RLS**: quien la tenga puede leer, modificar y borrar los datos de todos los usuarios. Por eso, en MisLukas:
 
 - Nunca se incluye en el código de la aplicación, en archivos de configuración del proyecto Flutter ni en el repositorio.
-- Solo se usa, si es necesario, dentro de funciones del servidor (_Edge Functions_), donde se lee desde variables de entorno secretas. Un ejemplo es la eliminación completa de la cuenta, que debe borrar el usuario de Supabase Auth.
+- Solo se usaría, si fuera necesario, dentro de funciones del servidor (_Edge Functions_), donde se lee desde variables de entorno secretas. En el MVP ninguna la usa: la eliminación de la cuenta se resuelve con una función de la base de datos que solo puede borrar al usuario que la llama (8.9.4).
 - El repositorio incluye reglas para excluir archivos de configuración con secretos, y antes de cada versión se revisa que no haya claves en el código.
 
 8.5.5 Políticas equivalentes en Storage
@@ -362,7 +364,9 @@ Al cerrar sesión, al eliminar la cuenta o al superar los intentos fallidos del 
 - Los tokens de sesión.
 - El hash del PIN.
 
-Si hay cambios pendientes de sincronizar, antes de cerrar sesión se intenta enviarlos. Si no hay conexión, se advierte al usuario que esos cambios se perderán y se le pide confirmar. Se eligió esta advertencia, en lugar de conservar los datos, porque dejar información financiera en un dispositivo sin sesión sería un riesgo mayor.
+Si hay cambios pendientes de sincronizar, antes de cerrar sesión se intenta enviarlos. Si no hay conexión o el servidor rechazó alguno, se advierte al usuario que esos cambios se perderán y se le pide confirmar. Se eligió esta advertencia, en lugar de conservar los datos, porque dejar información financiera en un dispositivo sin sesión sería un riesgo mayor.
+
+Los mismos datos se borran cuando inicia sesión un usuario distinto del dueño de la base local (por ejemplo, después de una sesión revocada, 8.2.6), previa confirmación.
 
 8.8.5 Protección del código y de las dependencias
 
@@ -464,13 +468,18 @@ Además de ser un requisito de publicación, es la forma de cumplir el derecho d
 
 **Proceso de eliminación en MisLukas (RF-48):**
 
-1. El usuario toca "Eliminar mi cuenta" en el perfil y confirma en un diálogo que explica que la acción es permanente. Por seguridad, se le pide su contraseña.
-2. La aplicación llama a una función del servidor (_Edge Function_) que, con la clave de servicio guardada de forma segura en el servidor, elimina:
-   - Los archivos del usuario en Storage.
-   - Sus registros en las tablas.
-   - Su usuario en Supabase Auth.
-3. La aplicación borra todos los datos locales (8.8.4) y regresa a la pantalla de inicio de sesión.
-4. Se envía un correo confirmando la eliminación.
+1. El usuario toca "Eliminar mi cuenta" en el perfil y confirma en un diálogo que explica que la acción es permanente. Por seguridad, se le pide su contraseña, que la app verifica de nuevo con Supabase Auth.
+2. La aplicación borra los archivos del usuario en Storage con la API de Storage (una política solo le permite borrar los de su propia carpeta). Supabase no permite borrarlos desde SQL.
+3. La aplicación llama a la función de la base de datos eliminar_mi_cuenta() (supabase/migrations/009). La función:
+   - Solo borra al usuario del token (auth.uid()); no recibe parámetros.
+   - Exige que la contraseña se haya verificado hace menos de cinco minutos (claim amr del token). Es el equivalente en el servidor de pedir la contraseña.
+   - Se rechaza si quedan archivos del usuario en Storage.
+   - Borra el usuario de Supabase Auth. Por las llaves foráneas con borrado en cascada, se eliminan también su perfil, movimientos, presupuestos, recibos y categorías.
+   - Es SECURITY DEFINER con search_path fijo (8.6) y no usa la clave service_role.
+4. La aplicación borra todos los datos locales (8.8.4) y regresa a la pantalla de inicio de sesión.
+5. Si la eliminación se interrumpe después de borrar los archivos (por ejemplo, por la red), la app permite reintentar sin volver a pedir la contraseña mientras siga dentro de los cinco minutos.
+
+**Pendiente:** el correo que confirma la eliminación. Requiere un proveedor de correo propio (8.3) o una función del servidor que lo envíe; se agregará con el SMTP de producción.
 
 Los datos se eliminan efectivamente, no solo se marcan como eliminados. A diferencia del borrado lógico usado para sincronizar movimientos individuales (6.4.1), la eliminación de la cuenta es definitiva.
 

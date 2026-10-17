@@ -38,6 +38,91 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - PRAGMA key es la única sentencia SQL con el valor dentro del texto, porque SQLite no admite parámetros en ese comando; antes se valida que la clave tenga exactamente 64 caracteres hexadecimales.
 - Los datos de demostración solo existen en modo desarrollo (`kDebugMode`): se cargan y se borran desde la galería y el Perfil con `DemoSeed` (`core/database/seed/demo_seed.dart`), con fechas relativas al reloj. En la versión de publicación la app arranca vacía y esas acciones no existen.
 - Otros se agregó a las categorías seleccionables de un gasto (registro y edición), aunque el boceto 5.7 no la muestra, porque RF-27 la incluye. Al editar un ingreso solo se ofrece Ingreso; el tipo no cambia al editar.
+- La verificación del correo al registrarse y la recuperación de contraseña usan un código de 6 dígitos escrito en la app (`verifyOTP`), no enlaces: no hay deep links (`detectSessionInUri: false`) ni cambios en `android/` o `ios/`. Las plantillas de correo de Supabase usan `{{ .Token }}`.
+- La sesión de Supabase y el verificador PKCE se guardan en `flutter_secure_storage` (`SecureSessionStorage` y `SecurePkceStorage` en `core/security/secure_auth_storage.dart`), nunca en SharedPreferences. `Supabase.initialize` usa `debug: false` para que no escriba logs.
+- `AuthRepository` ignora los errores de `onAuthStateChange`: un fallo de red al renovar el token no cierra la sesión. Solo se cierra si el servidor rechaza la sesión.
+- Auth no tiene casos de uso: los ViewModels usan `AuthRepository` y las validaciones están en `core/utils/validators.dart` (incluida la lista local de contraseñas comunes de docs/08 §8.2.4).
+- Después de guardar la contraseña con el código de recuperación se cierra la sesión en todos los dispositivos (`signOut(global)`) y el usuario vuelve a /login. Mientras la recuperación está en curso (`passwordRecoveryInProgressProvider`, se activa antes de verificar el código), el redirect no saca al usuario aunque haya sesión: `/recover` está apilada sobre `/login` y go_router evalúa el redirect con la ruta base (`/login`). La sesión temporal solo se cierra si el usuario sale por su cuenta (Volver o atrás del sistema, `RecoverPasswordViewModel.cancel`), nunca en un dispose.
+- Con sesión, la app entra directo a /home hasta que exista el desbloqueo (Fase 6). La pantalla de verificación recibe el correo en `extra` de go_router y no lo muestra.
+- Al registrarse, los metadatos del usuario llevan `nombre` y `politica_version` ("1"), para que la tabla perfiles los registre en 5B.
+- Esquema remoto en `supabase/migrations/` (001 a 008 de la 5B, 009 de la 5C), ejecutado a mano en el SQL Editor. Cada archivo es una transacción (`begin/commit`) y es repetible. `supabase/verify.sql` comprueba RLS, permisos y aislamiento entre dos usuarios. `supabase/rollback_5b.sql` deshace todo (solo en desarrollo).
+- Las categorías predeterminadas son filas globales en Supabase, con `usuario_id` null y los mismos UUID fijos (docs/06 y docs/08). Es la única columna `usuario_id` nullable. Todos las leen, nadie las modifica y la app no las envía.
+- En Supabase, `usuario_id` tiene `default auth.uid()` y `sincronizado_en` la asigna un trigger. El cliente no envía ninguno de los dos.
+- Presupuestos y recibos son únicos solo entre los no eliminados, con índices únicos parciales (`where eliminado_en is null`), tanto en Supabase como en Drift. En Supabase los índices incluyen `usuario_id`: (usuario_id, categoria_id, mes) en presupuestos y (usuario_id, movimiento_id) en recibos (migración 008). Si el índice de recibos fuera solo sobre `movimiento_id`, el recibo de otro usuario chocaría con él (23505) antes de que actuara la llave foránea (23503), y el código de error revelaría que ese movimiento existe. En Drift los índices no llevan `usuario_id`, porque la base local es de un solo usuario. El único `unique` total extra es `movimientos (usuario_id, id)`, destino de la llave foránea compuesta de recibos: un recibo solo puede apuntar a un movimiento del mismo usuario. Un trigger (`validar_categoria_del_usuario`) exige que la categoría sea predeterminada o del mismo usuario.
+- `perfiles` se crea con un trigger SECURITY DEFINER en `auth.users`, que rechaza el registro si falta `politica_version`. Guarda `politica_aceptada_en`. El usuario solo puede actualizar `nombre` (grant por columna).
+- El check del tipo de movimiento se llama `movimientos_tipo_check`, para ampliarlo con una migración (por ejemplo, 'saldo_inicial').
+- Bucket privado `recibos`: 5 MB, JPEG y PNG, ruta `{usuario_id}/{recibo_id}.jpg` sin subcarpetas. Hay políticas de select, insert y update; ninguna de delete. `recibos.ruta_storage` debe empezar por la carpeta del dueño.
+- Base local en la versión 4 de Drift. En la v2, `recibos.ruta_local` admite null (un recibo que llega del servidor no trae la imagen) y `Receipt.localPath` es `String?`. En la v3, `cola_sincronizacion` tiene `proximo_intento` y `ultimo_error` (solo el código). En la v4 se agrega `ajustes_locales` (clave, valor): ajustes del dispositivo, sin sincronizar, que se borran con la base.
+- DTOs remotos (5B) en `features/*/data/remote/`. Convierten entre filas de Drift y JSON de Supabase con `RemoteJson` (`core/sync/remote_json.dart`). `toCompanion()` deja `estado_sync = 'sincronizado'`, y el de recibos no toca `ruta_local`.
+- Sincronización (5C) en `core/sync/`:
+  - `SyncService` hace push, luego pull, y otro push si el pull dejó algo en la cola. Solo corre una ejecución a la vez.
+  - `SyncRemoteSource` es la fuente remota: `SupabaseSyncRemoteSource` en la app y `FakeSyncServer` en las pruebas.
+  - `LocalSyncStore` maneja la cola, la aplicación de filas remotas y los cursores. `sync_tables.dart` describe las 4 tablas en el orden de sus llaves foráneas.
+- Push:
+  - Varias entradas de un mismo registro se envían como un solo upsert con la fila actual. Los lotes son de 100 y van agrupados por las mismas columnas. Dentro de cada tabla, las eliminaciones van primero.
+  - Si un lote es rechazado, se reenvía de a un registro. El registro rechazado queda con `estado_sync = error` y espera 5 min · 2^(n−1), con tope de 24 h. Los errores de red o de sesión detienen el push sin marcar nada.
+  - El primer 23505 en una tabla con "único entre activos" se difiere: lo resuelve el pull.
+- Pull:
+  - Avanza por llave (sincronizado_en, id) desde el cursor menos 5 min de solape, en páginas de 200. Ignora las categorías predeterminadas.
+  - Un eliminado que llega del servidor se guarda como lápida. Si la fila es igual a la local, no se escribe nada.
+  - Si dos presupuestos activos de la misma categoría y mes tienen ids distintos, gana el de `actualizado_en` mayor (con empate, el de id mayor) y el otro se elimina de forma lógica.
+- En el servidor, la migración 009 aplica la misma regla con un trigger (`conservar_ultima_escritura`): una versión más vieja no reemplaza a la guardada, una eliminación siempre se acepta y un registro eliminado ya no cambia. `DriftBudgetRepository.save` ya no revive presupuestos eliminados: crea uno con id nuevo.
+- `SyncController` (`core/sync/sync_controller.dart`) solo sincroniza con la sesión lista:
+  - al abrir la app o iniciar sesión;
+  - 2 s después de cada escritura (observa la cola);
+  - al volver a primer plano (`SyncTriggers` en `app.dart`);
+  - cada 5 min;
+  - sin conexión, con reintentos a 5, 10, 20, 40 y 60 s.
+
+  Sin connectivity_plus (Fase 6), "sin conexión" es el resultado del último intento. `syncAutoTriggersProvider` lo apaga en las pruebas.
+- La base local tiene dueño: el id del usuario se guarda en `flutter_secure_storage` (`DeviceSessionStore`). `AccountSessionController` (`features/auth/presentation/`) da el estado `signedOut`, `foreignData`, `wiping` o `ready`. El router solo cuenta la sesión con `ready`.
+  - Si entra otro usuario, `ForeignDataPrompt` pide confirmar y se borra todo antes de abrir la base. Hay uno solo, global: está montado en el `builder` de `MaterialApp.router` y abre su diálogo en el navegador raíz (`rootNavigatorKeyProvider`). Así aparece una sola vez después del login, de verificar el registro o en cualquier pantalla. Si no puede mostrarse, cierra la sesión con un mensaje (`accountNoticeProvider`).
+  - El borrado (`FileLocalDataWiper`) borra primero la clave y el dueño. Después cierra la base (con tope de 5 s) y borra los archivos; los errores de esos dos pasos se ignoran. Al abrir, una base sin clave guardada se descarta (`deleteStaleDatabase`).
+  - El controlador tiene un tope de 15 s por borrado y siempre recalcula el estado al terminar. Un cierre de sesión se aplica de inmediato aunque haya un borrado en curso. Nunca queda con sesión sin `ready` ni aviso.
+  - Después de un cierre voluntario el dueño se borra en memoria y en el almacenamiento seguro; la siguiente cuenta entra sin aviso. Solo si no se pudo borrar la clave se conserva el dueño, y entonces la siguiente cuenta ve el aviso.
+  - Una base sin dueño (de antes de 5C) pasa al usuario que entra.
+- Una sesión revocada sin que el usuario la cierre conserva los datos cifrados (docs/06 §6.6.4, docs/08 §8.2.6).
+- `AccountActions` cierra la sesión: intenta enviar todo (10 s). Si quedan pendientes, el Perfil pide confirmar que se pierden. Luego cierra la sesión y `LocalDataWiper` borra la base (con `-wal`, `-shm` y `-journal`), la carpeta `recibos/`, la clave de cifrado y el dueño. `appDatabaseProvider` se invalida y la próxima base usa una clave nueva.
+- La marca de recuperación en curso también se guarda en el almacenamiento seguro. Si la app se cerró después de verificar el código, `main()` cierra esa sesión temporal antes de abrir la base (`clearInterruptedRecovery`).
+- Eliminación de cuenta (5C), sin Edge Function ni service_role:
+  - La app verifica de nuevo la contraseña (`AuthRepository.reauthenticate`).
+  - Borra `{uid}/*` en Storage en páginas de 100 (política de delete de la 009).
+  - Llama a `eliminar_mi_cuenta()`, que es SECURITY DEFINER, borra solo `auth.uid()` en cascada y exige el claim `amr` con la contraseña verificada hace menos de 5 min y que no queden archivos. Responde `P0001` con hint `reautenticacion` o `archivos_pendientes`.
+  - Si la RPC falla después de borrar los archivos, se reintenta sin pedir la contraseña durante 4 min 30 s.
+  - Pantalla `/profile/delete-account`, construida con `AuthFlowScaffold`.
+  - Queda pendiente el correo que confirma la eliminación (requiere SMTP).
+- Inicio: `MovementTile.isPendingSync` se muestra en lo pendiente o rechazado, y deslizar hacia abajo sincroniza. MainShell muestra `AppOfflineIndicator`. El Perfil muestra el estado de la sincronización con `AppBanner` (`SyncStatusBanner`).
+- Ingresos (5D, RF-50):
+  - El botón de Inicio dice "Nuevo movimiento" (el boceto 5.4 dice "Nuevo gasto") y abre `/movements/new`, que tiene el selector Gasto | Ingreso (`AppSegmentedTabs` dentro de `Semantics(label: 'Tipo de movimiento')`). Gasto viene seleccionado; `?type=income` abre Ingreso.
+  - El ingreso se registra en la misma pantalla con `IncomeFormFields` (`movements/presentation/widgets/`): valor, descripción y fecha. Usa `RegisterIncome`, que delega en `RegisterMovement` con la categoría Ingreso, origen manual y sin recibo. Las validaciones son las mismas: monto, largo y fecha no futura.
+  - En `ConfirmMovementViewModel` el modo es `CreateIncomeMode`. Al editar un ingreso se muestra el mismo formulario (sin categorías ni nota) y se guarda con `UpdateMovement(amount, description, date)`.
+  - La fecha es un `AppSecondaryButton` ("Hoy, 17 de octubre", `DateLabels.longDay`) que abre `showDatePicker` con `lastDate` = hoy. El formulario de gasto sigue sin fecha (usa hoy).
+  - `flutter_localizations` (SDK) con `es_CO` en `MaterialApp.router` (`core/config/app_localization.dart`), para que el calendario salga en español.
+- Bienvenida (5D, RF-51, `features/onboarding/`):
+  - "Usuario nuevo" significa que no tiene ningún dato propio: movimientos, presupuestos (aunque estén eliminados) ni categorías propias. Lo revisa `OnboardingRepository.hasOwnData`.
+  - Se decide después de la primera sincronización exitosa de la sesión. `WelcomeController` escucha cuándo cambia `SyncState.lastSyncedAt`; sin conexión espera.
+  - Si el usuario tiene datos, la marca queda como completada sin mostrar nada. La marca vive en `ajustes_locales` (`bienvenida = completada`) y se va con la base al cerrar sesión o al entrar otro usuario.
+  - `WelcomeLauncher` (en el `builder` de `MaterialApp.router`) abre `/welcome` con `push`, no con el redirect, para no perder un formulario abierto. Durante la recuperación de contraseña la sesión no está `ready`, así que no se decide nada.
+  - Paso 1: ingresos con `RegisterIncome`. Al volver y continuar, los ya guardados se actualizan y los quitados se eliminan (no se duplican). Paso 2: presupuestos opcionales con `SetBudget`.
+  - Omitir el paso 1 pasa al 2. Terminar u omitir el paso 2, o Volver en el paso 1, la marca como completada.
+  - `DemoSeed.load()` también marca la bienvenida; `clearAll()` no la toca.
+  - Limitación conocida: la marca es local. Quien la omitió sin registrar nada la ve de nuevo en otro celular. No hay columnas en Supabase para esto.
+- Historial (5E, RF-22, `movements/presentation/history/`):
+  - Ruta `/movements/history`, desde "Ver todos" de Inicio. Agrupado por mes, del más reciente al más antiguo, con `MovementTile` y el total de ingresos y gastos de cada mes.
+  - Filtro `AppSegmentedTabs` Todos | Gastos | Ingresos y `AppChipGroup<CategoryKind?>` con "Todas" y las categorías de gasto (ocultos con Ingresos). RF-22 pide "por mes y categoría": el mes lo da la agrupación.
+  - Carga por ventana de meses: `MovementRepository.watchMonthSummaries` agrupa en SQL (`substr(fecha, 1, 7)`) para saber qué meses hay, y solo se leen los movimientos de los 3 más recientes; al llegar al final se suman 3 (`WatchMovementHistory`, `switchMap` en `core/utils/streams.dart`). Los totales del encabezado se calculan con los movimientos cargados. `watchBetween` acepta un `MovementFilter` (tipo y categoría).
+- Presupuestos (5E, RF-52):
+  - Pantalla `/profile/budgets` (`BudgetsScreen`), desde Perfil › Preferencias › "Presupuestos" (docs/05 pantalla 10).
+  - Una tarjeta por categoría de gasto con gastado, límite, `AppVariationBar` (azul, amarilla desde 75%, roja desde 100%) y el porcentaje escrito. Al tocarla se edita en la misma tarjeta (una a la vez): Guardar (`SetBudget`), Cancelar y Quitar (`RemoveBudget`, con confirmación).
+  - `BudgetCategoryHeader` y `BudgetLimitField` (`budgets/presentation/widgets/`) los comparten la bienvenida (paso 2) y Presupuestos.
+  - `BudgetRepository` tiene `findById`, `remove` (borrado lógico con entrada `eliminar` en la cola) y `carryOver`. `DomainError.budgetNotFound`.
+- Continuidad entre meses (5E, RF-53):
+  - `BudgetRepository.carryOver`, en una transacción: si el mes actual tiene alguna fila de presupuesto (activa o eliminada) no hace nada; si no, toma el último mes anterior con alguna fila (también eliminadas) y copia sus activos con ids nuevos, mismos límites, pendientes y con su entrada `crear` en la cola. Así es idempotente, un presupuesto quitado en el mes no vuelve y, si el usuario los quitó todos, el mes siguiente queda vacío.
+  - `BudgetCarryOverController` corre `CarryOverBudgets` cada vez que termina un intento de sincronización (`isSyncing` pasa a false), salga bien o no, con la sesión `ready`. Con conexión el pull ya trajo lo que copió otro celular. Se mantiene vivo en `SyncTriggers` (`app.dart`).
+  - Si dos celulares copian el mismo mes sin conexión, la resolución de "único entre activos" de la 5C deja uno por categoría; las copias perdedoras quedan como lápidas y no se vuelve a copiar.
+  - Las alertas no cambian: se evalúan con los presupuestos y gastos de cada mes, así que el mes nuevo empieza sin alertas.
+- Fecha del gasto (5E, RF-19): `MovementDateField` (`movements/presentation/widgets/`) es el selector de fecha del ingreso y del gasto (AppFieldLabel + AppSecondaryButton + `showDatePicker` con `lastDate` = hoy). El gasto (foto, manual y edición) empieza con hoy (`ConfirmMovementState.date`) y se guarda con `RegisterMovement`/`UpdateMovement(date)`. Disponible, Reportes, alertas y simulador ya filtran por `fecha`. En Supabase no hay check de fecha futura (tampoco para el ingreso de la 5D): la validación es solo del cliente.
+- Fecha simulada solo en desarrollo: `clockProvider` usa `MonthShiftedClock` si `debugMonthOffsetProvider` es distinto de 0 y `kDebugMode`. Lo controlan "Adelantar un mes" y "Volver a la fecha real" en `DemoDataActions`; el desfase vive en memoria. Mientras está adelantada, todo lo que se guarda lleva fechas y `actualizado_en` futuros (que ganarían conflictos reales): solo se usa con una cuenta de prueba que se elimina al final.
 
 ## Stack
 
@@ -47,7 +132,8 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - **intl**: formato de moneda y fechas.
 - **Drift (SQLite) + SQLite3MultipleCiphers**: base de datos local cifrada (Fase 4).
 - **uuid**, **path_provider** y **flutter_secure_storage**: ya incorporadas en la Fase 4 (identificadores, ubicación de la base y clave de cifrado).
-- **Supabase**: Auth, PostgreSQL con Row Level Security y Storage (Fase 5).
+- **Supabase** (`supabase_flutter`, incorporado en la Fase 5A): Auth, PostgreSQL con Row Level Security y Storage (Fase 5).
+- **flutter_localizations** (del SDK, incorporado en la Fase 5D): textos del sistema en español (calendario).
 - **Paquetes del dispositivo** (Fase 6): `camera`, `image_picker`, `google_mlkit_text_recognition`, `flutter_local_notifications`, `local_auth`, `connectivity_plus`.
 
 No agregues dependencias de una fase futura ni paquetes fuera de esta lista sin consultarme.
@@ -87,6 +173,7 @@ lib/
     ├── budgets/     # Categorías, presupuestos y alertas
     ├── reports/     # Reportes por categoría y comparación mensual
     ├── simulator/   # Simulador de ahorro
+    ├── onboarding/  # Bienvenida para usuarios nuevos
     └── profile/     # Perfil, seguridad, eliminación de cuenta
 ```
 
@@ -116,6 +203,7 @@ En `lib/core/widgets/`. Importar siempre desde `package:mislukas/core/widgets/wi
 - `AppIconButton`: botón cuadrado de 48 dp con solo ícono y tooltip (notificaciones, cerrar, volver).
 - `AppCheckboxTile`: casilla con texto que puede incluir enlaces (`AppTextSegment`).
 - `AppPasswordStrength`: barra de fortaleza (Débil/Media/Fuerte) y lista de requisitos de contraseña.
+- `AppCodeField`: código de verificación de 6 dígitos en casillas, solo números, con autocompletado del código y error.
 - `ReceiptPreview`: vista previa de un recibo con el total resaltado como "Área detectada".
 - `AppCard`: tarjeta blanca con borde sutil y `onTap` opcional.
 - `AppSectionHeader`: título de sección con acción opcional a la derecha ("Ver todos").
@@ -129,7 +217,7 @@ En `lib/core/widgets/`. Importar siempre desde `package:mislukas/core/widgets/wi
 - `AppOfflineIndicator`: aviso discreto de "Sin conexión".
 - `AppSnackbar`: `AppSnackbar.success` / `AppSnackbar.error` / `AppSnackbar.info` para mensajes breves.
 - `showAppConfirmDialog`: diálogo de confirmación con "Cancelar" y una acción (en rojo con `destructive`); devuelve true si el usuario confirma.
-- `DemoDataActions` (`core/widgets/dev/`): "Cargar datos de demostración" y "Borrar todos los datos"; solo se muestra en modo desarrollo.
+- `DemoDataActions` (`core/widgets/dev/`): "Cargar datos de demostración", "Borrar todos los datos" y la fecha simulada ("Adelantar un mes"); solo se muestra en modo desarrollo.
 - `AppBottomNav`: barra inferior con Inicio, Reportes, Simular y Perfil.
 - `AppDonutChart` / `AppChartSegment`: gráfico de dona (CustomPainter) con contenido central y descripción para lectores de pantalla.
 - `AppBarComparisonChart` / `AppBarGroup`: barras verticales agrupadas de dos series (gris y primary) con leyenda; las etiquetas del eje no se enciman.
@@ -197,7 +285,7 @@ Detalle completo en `docs/08-seguridad.md`.
 5. **Supabase**: autenticación, RLS, sincronización.
 6. **Funciones del dispositivo**: cámara, OCR, notificaciones, biometría.
 
-**Fase actual: 4**
+**Fase actual: 6**
 
 ## Comandos
 
@@ -205,8 +293,10 @@ Detalle completo en `docs/08-seguridad.md`.
 flutter pub get        # Instalar dependencias
 flutter analyze        # Análisis estático (debe quedar sin errores ni warnings)
 flutter test           # Pruebas
-flutter run            # Ejecutar en el emulador
+flutter run --dart-define-from-file=env/dev.json   # Ejecutar en el emulador
 ```
+
+`env/dev.json` (ignorado por git) tiene `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`; se crea copiando `env/dev.example.json`. Sin esas variables la app falla al iniciar con un mensaje. `.vscode/launch.json` ya pasa ese argumento.
 
 El entorno es Windows con terminal cmd.
 

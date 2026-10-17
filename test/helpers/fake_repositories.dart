@@ -5,7 +5,10 @@ import 'package:mislukas/features/budgets/domain/entities/category.dart';
 import 'package:mislukas/features/budgets/domain/entities/default_categories.dart';
 import 'package:mislukas/features/budgets/domain/repositories/budget_repository.dart';
 import 'package:mislukas/features/budgets/domain/repositories/category_repository.dart';
+import 'package:mislukas/core/utils/clock.dart';
+import 'package:mislukas/features/movements/domain/entities/month_summary.dart';
 import 'package:mislukas/features/movements/domain/entities/movement.dart';
+import 'package:mislukas/features/movements/domain/entities/movement_filter.dart';
 import 'package:mislukas/features/movements/domain/entities/receipt.dart';
 import 'package:mislukas/features/movements/domain/repositories/movement_repository.dart';
 
@@ -70,8 +73,29 @@ class FakeMovementRepository implements MovementRepository {
       _watch(_changes.stream, () => _active.take(limit).toList());
 
   @override
-  Stream<List<Movement>> watchBetween(DateTime from, DateTime to) =>
-      _watch(_changes.stream, () => _between(from, to));
+  Stream<List<Movement>> watchBetween(
+    DateTime from,
+    DateTime to, {
+    MovementFilter filter = MovementFilter.all,
+  }) => _watch(
+    _changes.stream,
+    () => _between(from, to).where(filter.matches).toList(),
+  );
+
+  @override
+  Stream<List<MonthSummary>> watchMonthSummaries({
+    MovementFilter filter = MovementFilter.all,
+  }) => _watch(_changes.stream, () {
+    final byMonth = <DateTime, List<Movement>>{};
+    for (final movement in _active.where(filter.matches)) {
+      byMonth.putIfAbsent(monthStart(movement.date), () => []).add(movement);
+    }
+    final months = byMonth.keys.toList()..sort((a, b) => b.compareTo(a));
+    return [
+      for (final month in months)
+        summarizeMonth(month: month, movements: byMonth[month]!),
+    ];
+  });
 
   @override
   Future<List<Movement>> getBetween(DateTime from, DateTime to) async =>
@@ -110,7 +134,11 @@ class FakeBudgetRepository implements BudgetRepository {
     budgets.addAll(initial);
   }
 
+  /// Presupuestos activos.
   final List<Budget> budgets = [];
+
+  /// Presupuestos quitados (borrado lógico).
+  final List<Budget> removed = [];
   final StreamController<void> _changes = StreamController.broadcast();
 
   List<Budget> _forMonth(DateTime month) =>
@@ -122,6 +150,14 @@ class FakeBudgetRepository implements BudgetRepository {
 
   @override
   Future<List<Budget>> getForMonth(DateTime month) async => _forMonth(month);
+
+  @override
+  Future<Budget?> findById(String id) async {
+    for (final budget in budgets) {
+      if (budget.id == id) return budget;
+    }
+    return null;
+  }
 
   @override
   Future<Budget> save(Budget budget, {required DateTime at}) async {
@@ -143,5 +179,41 @@ class FakeBudgetRepository implements BudgetRepository {
     }
     _changes.add(null);
     return saved;
+  }
+
+  @override
+  Future<void> remove(String id, {required DateTime at}) async {
+    final index = budgets.indexWhere((b) => b.id == id);
+    if (index < 0) throw StateError('Presupuesto inexistente: $id');
+    removed.add(budgets.removeAt(index));
+    _changes.add(null);
+  }
+
+  @override
+  Future<List<Budget>> carryOver({
+    required DateTime month,
+    required DateTime at,
+    required String Function() newId,
+  }) async {
+    final all = [...budgets, ...removed];
+    if (all.any((b) => b.month == month)) return const [];
+    final earlier = [
+      for (final b in all)
+        if (b.month.isBefore(month)) b.month,
+    ];
+    if (earlier.isEmpty) return const [];
+    final source = earlier.reduce((a, b) => a.isAfter(b) ? a : b);
+    final copies = [
+      for (final b in _forMonth(source))
+        Budget(
+          id: newId(),
+          categoryId: b.categoryId,
+          month: month,
+          limitAmount: b.limitAmount,
+        ),
+    ];
+    budgets.addAll(copies);
+    if (copies.isNotEmpty) _changes.add(null);
+    return copies;
   }
 }

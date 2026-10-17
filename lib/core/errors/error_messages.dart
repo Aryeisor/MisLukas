@@ -21,5 +21,6 @@ String userMessageFor(Object error) {
     DomainError.movementNotFound => 'Este movimiento ya no existe.',
     DomainError.textTooLong => 'La nota es demasiado larga.',
     DomainError.futureDate => 'La fecha no puede ser posterior a hoy.',
+    DomainError.budgetNotFound => 'Este presupuesto ya no existe.',
   };
 }

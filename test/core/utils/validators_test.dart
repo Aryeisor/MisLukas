@@ -66,4 +66,43 @@ void main() {
       expect(passwordStrength('Clave123*'), PasswordStrength.strong);
     });
   });
+
+  group('autenticación (docs/08 §8.2.4 y §8.6)', () {
+    test('normalizeEmail quita espacios y pasa a minúscula', () {
+      expect(normalizeEmail('  Camila@Ejemplo.COM '), 'camila@ejemplo.com');
+    });
+
+    test('isValidEmail rechaza correos de más de 254 caracteres', () {
+      final long = '${'a' * 250}@b.co';
+      expect(isValidEmail(long), isFalse);
+    });
+
+    test('isValidName exige texto y como máximo 60 caracteres', () {
+      expect(isValidName('Camila'), isTrue);
+      expect(isValidName('   '), isFalse);
+      expect(isValidName('a' * nameMaxLength), isTrue);
+      expect(isValidName('a' * (nameMaxLength + 1)), isFalse);
+    });
+
+    test('isCommonPassword reconoce contraseñas comunes sin importar mayúsculas',
+        () {
+      expect(isCommonPassword('Password1!'), isTrue);
+      expect(isCommonPassword('COLOMBIA123*'), isTrue);
+      expect(isCommonPassword('Lukas#Ahorro26'), isFalse);
+    });
+
+    test('isAcceptablePassword: requisitos, no común y máximo 72', () {
+      expect(isAcceptablePassword('Lukas#Ahorro26'), isTrue);
+      expect(isAcceptablePassword('Password1!'), isFalse);
+      expect(isAcceptablePassword('lukas#ahorro26'), isFalse);
+      expect(isAcceptablePassword('Aa1*${'x' * 69}'), isFalse);
+    });
+
+    test('isValidOtp exige exactamente 6 dígitos', () {
+      expect(isValidOtp('123456'), isTrue);
+      expect(isValidOtp('12345'), isFalse);
+      expect(isValidOtp('1234567'), isFalse);
+      expect(isValidOtp('12345a'), isFalse);
+    });
+  });
 }

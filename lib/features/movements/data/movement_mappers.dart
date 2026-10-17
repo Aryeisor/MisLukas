@@ -85,7 +85,7 @@ extension ReceiptToCompanion on Receipt {
       ReceiptsCompanion.insert(
         id: id,
         movementId: movementId,
-        localPath: localPath,
+        localPath: Value(localPath),
         detectedTotal: Value(detectedTotal),
         detectedMerchant: Value(detectedMerchant),
         createdAt: at.toUtc(),

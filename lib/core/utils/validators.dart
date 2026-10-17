@@ -1,17 +1,60 @@
-/// Validaciones de formularios (RF-02 y regla de montos de CLAUDE.md).
-/// Funciones puras: no dependen de Flutter.
+/// Validaciones de formularios (RF-02, docs/08 §8.2.4 y §8.6 y regla de montos
+/// de CLAUDE.md). Funciones puras: no dependen de Flutter.
 library;
+
+import 'common_passwords.dart';
 
 final RegExp _emailPattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
+/// Largo máximo de un correo (RFC 5321).
+const int emailMaxLength = 254;
+
 /// Formato básico de correo: texto@dominio.ext, sin espacios.
-bool isValidEmail(String email) => _emailPattern.hasMatch(email.trim());
+bool isValidEmail(String email) {
+  final trimmed = email.trim();
+  return trimmed.length <= emailMaxLength && _emailPattern.hasMatch(trimmed);
+}
+
+/// Correo sin espacios y en minúscula.
+String normalizeEmail(String email) => email.trim().toLowerCase();
+
+/// Largo máximo del nombre en el registro (docs/08 §8.6).
+const int nameMaxLength = 60;
+
+/// El nombre tiene texto y no supera [nameMaxLength].
+bool isValidName(String name) {
+  final trimmed = name.trim();
+  return trimmed.isNotEmpty && trimmed.length <= nameMaxLength;
+}
 
 /// Un monto es válido si existe y es mayor que cero.
 bool isValidAmount(int? amount) => amount != null && amount > 0;
 
 /// Mínimo de caracteres de una contraseña.
 const int passwordMinLength = 8;
+
+/// Máximo de caracteres de una contraseña: bcrypt solo usa los primeros 72
+/// bytes.
+const int passwordMaxLength = 72;
+
+/// La contraseña está en la lista local de contraseñas comunes
+/// (docs/08 §8.2.4). No distingue mayúsculas.
+bool isCommonPassword(String password) =>
+    commonPasswords.contains(password.toLowerCase());
+
+/// La contraseña cumple los requisitos, no es común y no es demasiado larga.
+bool isAcceptablePassword(String password) =>
+    PasswordRequirements.check(password).allMet &&
+    password.length <= passwordMaxLength &&
+    !isCommonPassword(password);
+
+/// Dígitos del código de verificación enviado al correo.
+const int otpLength = 6;
+
+final RegExp _otpPattern = RegExp('^\\d{$otpLength}\$');
+
+/// El código tiene exactamente [otpLength] dígitos.
+bool isValidOtp(String code) => _otpPattern.hasMatch(code);
 
 /// Requisitos de la contraseña (RF-02) y cuáles se cumplen.
 class PasswordRequirements {

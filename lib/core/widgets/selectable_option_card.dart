@@ -53,7 +53,9 @@ class SelectableOptionCard extends StatelessWidget {
                   width: AppSizes.iconBox,
                   height: AppSizes.iconBox,
                   decoration: BoxDecoration(
-                    color: selected ? AppColors.surface : AppColors.surfaceMuted,
+                    color: selected
+                        ? AppColors.surface
+                        : AppColors.surfaceMuted,
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                   child: Icon(

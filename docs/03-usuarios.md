@@ -169,6 +169,8 @@ Criterios de aceptación:
 
 - **Dado** que elijo "Registro manual", **cuando** ingreso un valor y una categoría, **entonces** puedo guardar el movimiento.
 - **Dado** que dejo el valor vacío o ingreso un valor negativo o cero, **cuando** intento guardar, **entonces** el sistema no lo permite y muestra un mensaje de error.
+- **Dado** que elijo "Ingreso" en Nuevo movimiento, **cuando** escribo el valor, la descripción y la fecha, **entonces** el ingreso se guarda con la categoría Ingreso, aparece en verde y con signo más, y aumenta mi disponible del mes.
+- **Dado** que registro un ingreso, **cuando** elijo la fecha, **entonces** el sistema no me permite elegir un día posterior a hoy.
 
 **HU-07 · Uso sin conexión** · Prioridad: Must
 
@@ -200,6 +202,20 @@ Criterios de aceptación:
 - **Dado** que tengo movimientos registrados en el mes, **cuando** entro a Reportes, **entonces** veo el total gastado y un gráfico con el porcentaje de cada categoría.
 - **Dado** que tengo datos del mes anterior, **cuando** reviso la comparación, **entonces** los aumentos se muestran en rojo y las reducciones en verde.
 - **Dado** que no tengo movimientos en el mes, **cuando** entro a Reportes, **entonces** veo un mensaje que me invita a registrar mi primer gasto.
+
+**Módulo de bienvenida**
+
+**HU-11 · Bienvenida y configuración inicial** · Prioridad: Should
+
+Como usuario nuevo, quiero indicar con cuánto dinero cuento este mes y definir mis presupuestos al empezar, para que el disponible y las alertas funcionen desde mi primer gasto.
+
+Criterios de aceptación:
+
+- **Dado** que es mi primera vez y no tengo datos, **cuando** la aplicación termina de sincronizar, **entonces** veo la bienvenida con la pregunta "¿Con cuánto dinero cuentas este mes?".
+- **Dado** que ya tengo datos en la nube, **cuando** inicio sesión en un celular nuevo, **entonces** no veo la bienvenida y encuentro mis movimientos.
+- **Dado** que inicio sesión por primera vez sin conexión, **cuando** todavía no se ha sincronizado, **entonces** la bienvenida no aparece hasta que haya conexión y se confirme que no tengo datos.
+- **Dado** que estoy en la bienvenida, **cuando** registro uno o varios ingresos, **entonces** se guardan como ingresos del mes y puedo continuar a los presupuestos.
+- **Dado** que estoy en cualquier paso, **cuando** toco "Omitir", **entonces** paso al siguiente o termino, y la bienvenida no vuelve a aparecer en este celular.
 
 **Módulo de simulador**
 

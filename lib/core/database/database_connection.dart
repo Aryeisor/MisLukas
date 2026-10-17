@@ -11,13 +11,43 @@ import '../security/database_key_store.dart';
 /// Nombre del archivo de la base local.
 const String databaseFileName = 'mislukas.sqlite';
 
+/// Carpeta de las imágenes de recibos, junto a la base (Fase 6).
+const String receiptsDirectoryName = 'recibos';
+
+/// Archivos de la base: el principal y los temporales de SQLite.
+const List<String> localDatabaseFiles = [
+  databaseFileName,
+  '$databaseFileName-wal',
+  '$databaseFileName-shm',
+  '$databaseFileName-journal',
+];
+
+/// Borra los archivos de la base en [directory] (los que existan).
+Future<void> deleteDatabaseFiles(Directory directory) async {
+  for (final name in localDatabaseFiles) {
+    final file = File(p.join(directory.path, name));
+    if (await file.exists()) await file.delete();
+  }
+}
+
+/// Si no hay clave guardada, una base que haya quedado en [directory] (de un
+/// borrado incompleto) no se puede leer: se borra antes de crear la nueva.
+Future<void> deleteStaleDatabase(
+  DatabaseKeyStore keyStore,
+  Directory directory,
+) async {
+  if (await keyStore.hasStoredKey()) return;
+  await deleteDatabaseFiles(directory);
+}
+
 /// Abre la base local cifrada en el directorio de soporte de la aplicación
 /// (privado y no visible para el usuario). La clave se lee del almacenamiento
 /// seguro la primera vez que se usa la base.
 QueryExecutor openEncryptedDatabase(DatabaseKeyStore keyStore) {
   return LazyDatabase(() async {
-    final key = await keyStore.getOrCreateKey();
     final directory = await getApplicationSupportDirectory();
+    await deleteStaleDatabase(keyStore, directory);
+    final key = await keyStore.getOrCreateKey();
     return openEncryptedFile(
       File(p.join(directory.path, databaseFileName)),
       hexKey: key,

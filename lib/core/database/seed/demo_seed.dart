@@ -8,6 +8,8 @@ import '../../../features/budgets/domain/repositories/budget_repository.dart';
 import '../../../features/movements/data/movements_providers.dart';
 import '../../../features/movements/domain/entities/movement.dart';
 import '../../../features/movements/domain/repositories/movement_repository.dart';
+import '../../../features/onboarding/data/onboarding_providers.dart';
+import '../../../features/onboarding/domain/onboarding_repository.dart';
 import '../../sync/sync_status.dart';
 import '../../utils/clock.dart';
 import '../../utils/id_generator.dart';
@@ -199,6 +201,7 @@ class DemoSeed {
     required this._db,
     required this._movements,
     required this._budgets,
+    required this._onboarding,
     required this._clock,
     required this._ids,
   });
@@ -206,10 +209,12 @@ class DemoSeed {
   final AppDatabase _db;
   final MovementRepository _movements;
   final BudgetRepository _budgets;
+  final OnboardingRepository _onboarding;
   final Clock _clock;
   final IdGenerator _ids;
 
-  /// Reemplaza todos los datos por los de la demo.
+  /// Reemplaza todos los datos por los de la demo. También marca la bienvenida
+  /// como completada: con la demo no se muestra ni duplica ingresos.
   Future<void> load() {
     return _db.transaction(() async {
       await clearAll();
@@ -225,11 +230,12 @@ class DemoSeed {
         ),
         at: _clock.now(),
       );
+      await _onboarding.markWelcomeDone();
     });
   }
 
   /// Borra todos los datos del usuario, incluida la cola de sincronización.
-  /// Conserva las categorías predeterminadas.
+  /// Conserva las categorías predeterminadas y la marca de la bienvenida.
   Future<void> clearAll() {
     return _db.transaction(() async {
       // Primero los que tienen llaves foráneas.
@@ -251,6 +257,7 @@ final demoSeedProvider = Provider<DemoSeed>(
     db: ref.watch(appDatabaseProvider),
     movements: ref.watch(movementRepositoryProvider),
     budgets: ref.watch(budgetRepositoryProvider),
+    onboarding: ref.watch(onboardingRepositoryProvider),
     clock: ref.watch(clockProvider),
     ids: ref.watch(idGeneratorProvider),
   ),

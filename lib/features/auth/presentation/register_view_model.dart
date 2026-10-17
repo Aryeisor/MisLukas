@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/validators.dart';
+import '../data/auth_providers.dart';
+import '../domain/auth_failure.dart';
+import 'auth_messages.dart';
 
 /// Estado inmutable del formulario de registro.
 class RegisterState {
@@ -12,6 +15,7 @@ class RegisterState {
     this.acceptedTerms = false,
     this.emailTouched = false,
     this.isSubmitting = false,
+    this.failure,
     this.submittedEmail,
   });
 
@@ -23,20 +27,32 @@ class RegisterState {
   final bool emailTouched;
   final bool isSubmitting;
 
-  /// Correo de la cuenta creada; cuando existe se muestra "Verifica tu correo".
+  /// Error del último envío; null si no hubo error.
+  final AuthFailure? failure;
+
+  /// Correo de la cuenta creada; cuando existe se abre "Verifica tu correo".
   final String? submittedEmail;
 
-  PasswordRequirements get requirements =>
-      PasswordRequirements.check(password);
+  PasswordRequirements get requirements => PasswordRequirements.check(password);
 
   PasswordStrength get strength => passwordStrength(password);
 
   /// El indicador de fortaleza aparece al empezar a escribir.
   bool get showStrength => password.isNotEmpty;
 
-  String? get emailError => emailTouched && email.isNotEmpty && !isValidEmail(email)
+  String? get emailError =>
+      emailTouched && email.isNotEmpty && !isValidEmail(email)
       ? 'Ingresa un correo válido'
       : null;
+
+  /// Errores de la contraseña que no muestra la lista de requisitos.
+  String? get passwordError {
+    if (password.length > passwordMaxLength) return passwordTooLongMessage;
+    if (requirements.allMet && isCommonPassword(password)) {
+      return commonPasswordMessage;
+    }
+    return null;
+  }
 
   String? get confirmError =>
       confirmPassword.isNotEmpty && confirmPassword != password
@@ -44,9 +60,9 @@ class RegisterState {
       : null;
 
   bool get canSubmit =>
-      name.trim().isNotEmpty &&
+      isValidName(name) &&
       isValidEmail(email) &&
-      requirements.allMet &&
+      isAcceptablePassword(password) &&
       confirmPassword == password &&
       acceptedTerms &&
       !isSubmitting;
@@ -59,6 +75,7 @@ class RegisterState {
     bool? acceptedTerms,
     bool? emailTouched,
     bool? isSubmitting,
+    AuthFailure? Function()? failure,
     String? submittedEmail,
   }) {
     return RegisterState(
@@ -69,19 +86,18 @@ class RegisterState {
       acceptedTerms: acceptedTerms ?? this.acceptedTerms,
       emailTouched: emailTouched ?? this.emailTouched,
       isSubmitting: isSubmitting ?? this.isSubmitting,
+      failure: failure != null ? failure() : this.failure,
       submittedEmail: submittedEmail ?? this.submittedEmail,
     );
   }
 }
-
-/// Duración simulada de la creación de la cuenta.
-const Duration registerDemoDelay = Duration(seconds: 1);
 
 final registerViewModelProvider =
     NotifierProvider.autoDispose<RegisterViewModel, RegisterState>(
       RegisterViewModel.new,
     );
 
+/// ViewModel del registro (RF-01 a RF-04).
 class RegisterViewModel extends Notifier<RegisterState> {
   @override
   RegisterState build() => const RegisterState();
@@ -98,17 +114,25 @@ class RegisterViewModel extends Notifier<RegisterState> {
     if (!state.emailTouched) state = state.copyWith(emailTouched: true);
   }
 
-  /// SOLO DEMO: simula la creación de la cuenta (Supabase Auth en la Fase 5).
+  /// Crea la cuenta. Supabase envía el código de verificación al correo.
   Future<void> submit() async {
     if (!state.canSubmit) return;
-    state = state.copyWith(isSubmitting: true);
+    state = state.copyWith(isSubmitting: true, failure: () => null);
 
-    await Future<void>.delayed(registerDemoDelay);
-    if (!ref.mounted) return;
-
-    state = state.copyWith(
-      isSubmitting: false,
-      submittedEmail: state.email.trim(),
-    );
+    final email = normalizeEmail(state.email);
+    try {
+      await ref
+          .read(authRepositoryProvider)
+          .signUp(
+            name: state.name.trim(),
+            email: email,
+            password: state.password,
+          );
+      if (!ref.mounted) return;
+      state = state.copyWith(isSubmitting: false, submittedEmail: email);
+    } on AuthFailureException catch (error) {
+      if (!ref.mounted) return;
+      state = state.copyWith(isSubmitting: false, failure: () => error.failure);
+    }
   }
 }

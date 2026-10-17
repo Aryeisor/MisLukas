@@ -3,14 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mislukas/app.dart';
+import 'package:mislukas/core/config/app_localization.dart';
 import 'package:mislukas/core/database/app_database.dart';
 import 'package:mislukas/core/database/database_providers.dart';
 import 'package:mislukas/core/theme/app_theme.dart';
 import 'package:mislukas/core/utils/clock.dart';
 import 'package:mislukas/core/utils/utils_providers.dart';
 import 'package:mislukas/core/widgets/widgets.dart';
+import 'package:mislukas/features/auth/data/auth_providers.dart';
 
 import 'domain_fixtures.dart';
+import 'fake_auth_repository.dart';
+import 'test_session.dart';
 
 /// Base en memoria y reloj fijo (22/09/2026) para las pantallas.
 List<Override> databaseOverrides(AppDatabase database, {Clock? clock}) => [
@@ -18,39 +22,58 @@ List<Override> databaseOverrides(AppDatabase database, {Clock? clock}) => [
   clockProvider.overrideWithValue(clock ?? testClock),
 ];
 
+/// Autenticación sin red: [auth], o la usuaria de pruebas con sesión.
+Override authOverride(FakeAuthRepository? auth) => authRepositoryProvider
+    .overrideWithValue(auth ?? FakeAuthRepository(signedInAs: testUser));
+
 /// Monta una pantalla con ProviderScope y el tema de MisLukas. Con
-/// [database], usa esa base y el reloj de las pruebas.
+/// [database], usa esa base y el reloj de las pruebas. Por defecto la usuaria
+/// de pruebas tiene sesión; [auth] lo reemplaza.
 Future<void> pumpScreen(
   WidgetTester tester,
   Widget screen, {
   AppDatabase? database,
+  FakeAuthRepository? auth,
+  TestSession? session,
   List<Override> overrides = const [],
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        authOverride(auth),
         if (database != null) ...databaseOverrides(database),
+        ...(session ?? TestSession()).overrides(database),
         ...overrides,
       ],
       // Sin reintentos: los errores se muestran de inmediato y no dejan
       // timers pendientes.
       retry: (_, _) => null,
-      child: MaterialApp(theme: AppTheme.light, home: screen),
+      child: MaterialApp(
+        theme: AppTheme.light,
+        locale: appLocale,
+        supportedLocales: appSupportedLocales,
+        localizationsDelegates: appLocalizationsDelegates,
+        home: screen,
+      ),
     ),
   );
   await tester.pumpAndSettle();
 }
 
-/// Monta la app completa con su router.
+/// Monta la app completa con su router. Por defecto arranca sin sesión.
 Future<void> pumpApp(
   WidgetTester tester, {
   AppDatabase? database,
+  FakeAuthRepository? auth,
+  TestSession? session,
   List<Override> overrides = const [],
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        authOverride(auth ?? FakeAuthRepository()),
         if (database != null) ...databaseOverrides(database),
+        ...(session ?? TestSession()).overrides(database),
         ...overrides,
       ],
       retry: (_, _) => null,
@@ -84,7 +107,7 @@ Future<void> expectNoOverflowWhileScrolling(WidgetTester tester) async {
   }
 }
 
-/// Inicia sesión en la demo con un correo válido.
+/// Inicia sesión con un correo válido (repositorio falso, sin red).
 Future<void> loginAsDemoUser(WidgetTester tester) async {
   await tester.enterText(find.byType(TextField).at(0), 'camila@ejemplo.com');
   await tester.enterText(find.byType(TextField).at(1), 'Clave123*');

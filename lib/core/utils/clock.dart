@@ -27,6 +27,35 @@ class FixedClock implements Clock {
   DateTime now() => _now;
 }
 
+/// Reloj corrido [months] meses respecto a [base], para simular otro mes en
+/// modo desarrollo. Conserva el día y la hora; si el mes destino es más corto,
+/// usa su último día (31 de enero + 1 mes = 28 o 29 de febrero).
+class MonthShiftedClock implements Clock {
+  const MonthShiftedClock(this._base, this.months);
+
+  final Clock _base;
+  final int months;
+
+  @override
+  DateTime now() => shiftMonths(_base.now(), months);
+}
+
+/// [date] corrido [months] meses, con el día recortado al último del mes.
+DateTime shiftMonths(DateTime date, int months) {
+  final target = DateTime(date.year, date.month + months);
+  final lastDay = DateTime(target.year, target.month + 1, 0).day;
+  return DateTime(
+    target.year,
+    target.month,
+    date.day > lastDay ? lastDay : date.day,
+    date.hour,
+    date.minute,
+    date.second,
+    date.millisecond,
+    date.microsecond,
+  );
+}
+
 extension ClockDates on Clock {
   /// Fecha de hoy, sin hora.
   DateTime today() => dateOnly(now());

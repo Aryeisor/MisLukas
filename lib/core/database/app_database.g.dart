@@ -1506,10 +1506,6 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, BudgetRow> {
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  List<Set<GeneratedColumn>> get uniqueKeys => [
-    {categoryId, month},
-  ];
-  @override
   BudgetRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return BudgetRow(
@@ -1931,7 +1927,7 @@ class $ReceiptsTable extends Receipts
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'UNIQUE REFERENCES movimientos (id)',
+      'REFERENCES movimientos (id)',
     ),
   );
   static const VerificationMeta _localPathMeta = const VerificationMeta(
@@ -1941,9 +1937,9 @@ class $ReceiptsTable extends Receipts
   late final GeneratedColumn<String> localPath = GeneratedColumn<String>(
     'ruta_local',
     aliasedName,
-    false,
+    true,
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _detectedTotalMeta = const VerificationMeta(
     'detectedTotal',
@@ -2043,8 +2039,6 @@ class $ReceiptsTable extends Receipts
         _localPathMeta,
         localPath.isAcceptableOrUnknown(data['ruta_local']!, _localPathMeta),
       );
-    } else if (isInserting) {
-      context.missing(_localPathMeta);
     }
     if (data.containsKey('total_detectado')) {
       context.handle(
@@ -2100,7 +2094,7 @@ class $ReceiptsTable extends Receipts
       localPath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}ruta_local'],
-      )!,
+      ),
       detectedTotal: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}total_detectado'],
@@ -2124,10 +2118,11 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
   final DateTime? deletedAt;
   final String syncStatus;
   final String id;
-
-  /// Un recibo por movimiento.
   final String movementId;
-  final String localPath;
+
+  /// Imagen en el almacenamiento interno de la app. Null si el recibo llegó
+  /// del servidor y la imagen no está en este dispositivo.
+  final String? localPath;
   final int? detectedTotal;
   final String? detectedMerchant;
   const ReceiptRow({
@@ -2137,7 +2132,7 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
     required this.syncStatus,
     required this.id,
     required this.movementId,
-    required this.localPath,
+    this.localPath,
     this.detectedTotal,
     this.detectedMerchant,
   });
@@ -2152,7 +2147,9 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
     map['estado_sync'] = Variable<String>(syncStatus);
     map['id'] = Variable<String>(id);
     map['movimiento_id'] = Variable<String>(movementId);
-    map['ruta_local'] = Variable<String>(localPath);
+    if (!nullToAbsent || localPath != null) {
+      map['ruta_local'] = Variable<String>(localPath);
+    }
     if (!nullToAbsent || detectedTotal != null) {
       map['total_detectado'] = Variable<int>(detectedTotal);
     }
@@ -2172,7 +2169,9 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
       syncStatus: Value(syncStatus),
       id: Value(id),
       movementId: Value(movementId),
-      localPath: Value(localPath),
+      localPath: localPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(localPath),
       detectedTotal: detectedTotal == null && nullToAbsent
           ? const Value.absent()
           : Value(detectedTotal),
@@ -2194,7 +2193,7 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
       syncStatus: serializer.fromJson<String>(json['syncStatus']),
       id: serializer.fromJson<String>(json['id']),
       movementId: serializer.fromJson<String>(json['movementId']),
-      localPath: serializer.fromJson<String>(json['localPath']),
+      localPath: serializer.fromJson<String?>(json['localPath']),
       detectedTotal: serializer.fromJson<int?>(json['detectedTotal']),
       detectedMerchant: serializer.fromJson<String?>(json['detectedMerchant']),
     );
@@ -2209,7 +2208,7 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
       'syncStatus': serializer.toJson<String>(syncStatus),
       'id': serializer.toJson<String>(id),
       'movementId': serializer.toJson<String>(movementId),
-      'localPath': serializer.toJson<String>(localPath),
+      'localPath': serializer.toJson<String?>(localPath),
       'detectedTotal': serializer.toJson<int?>(detectedTotal),
       'detectedMerchant': serializer.toJson<String?>(detectedMerchant),
     };
@@ -2222,7 +2221,7 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
     String? syncStatus,
     String? id,
     String? movementId,
-    String? localPath,
+    Value<String?> localPath = const Value.absent(),
     Value<int?> detectedTotal = const Value.absent(),
     Value<String?> detectedMerchant = const Value.absent(),
   }) => ReceiptRow(
@@ -2232,7 +2231,7 @@ class ReceiptRow extends DataClass implements Insertable<ReceiptRow> {
     syncStatus: syncStatus ?? this.syncStatus,
     id: id ?? this.id,
     movementId: movementId ?? this.movementId,
-    localPath: localPath ?? this.localPath,
+    localPath: localPath.present ? localPath.value : this.localPath,
     detectedTotal: detectedTotal.present
         ? detectedTotal.value
         : this.detectedTotal,
@@ -2312,7 +2311,7 @@ class ReceiptsCompanion extends UpdateCompanion<ReceiptRow> {
   final Value<String> syncStatus;
   final Value<String> id;
   final Value<String> movementId;
-  final Value<String> localPath;
+  final Value<String?> localPath;
   final Value<int?> detectedTotal;
   final Value<String?> detectedMerchant;
   final Value<int> rowid;
@@ -2335,15 +2334,14 @@ class ReceiptsCompanion extends UpdateCompanion<ReceiptRow> {
     this.syncStatus = const Value.absent(),
     required String id,
     required String movementId,
-    required String localPath,
+    this.localPath = const Value.absent(),
     this.detectedTotal = const Value.absent(),
     this.detectedMerchant = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : createdAt = Value(createdAt),
        updatedAt = Value(updatedAt),
        id = Value(id),
-       movementId = Value(movementId),
-       localPath = Value(localPath);
+       movementId = Value(movementId);
   static Insertable<ReceiptRow> custom({
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -2377,7 +2375,7 @@ class ReceiptsCompanion extends UpdateCompanion<ReceiptRow> {
     Value<String>? syncStatus,
     Value<String>? id,
     Value<String>? movementId,
-    Value<String>? localPath,
+    Value<String?>? localPath,
     Value<int?>? detectedTotal,
     Value<String?>? detectedMerchant,
     Value<int>? rowid,
@@ -2526,6 +2524,29 @@ class $SyncQueueTable extends SyncQueue
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _nextAttemptAtMeta = const VerificationMeta(
+    'nextAttemptAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> nextAttemptAt =
+      GeneratedColumn<DateTime>(
+        'proximo_intento',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastErrorMeta = const VerificationMeta(
+    'lastError',
+  );
+  @override
+  late final GeneratedColumn<String> lastError = GeneratedColumn<String>(
+    'ultimo_error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -2534,6 +2555,8 @@ class $SyncQueueTable extends SyncQueue
     operation,
     createdAt,
     attempts,
+    nextAttemptAt,
+    lastError,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2588,6 +2611,21 @@ class $SyncQueueTable extends SyncQueue
         attempts.isAcceptableOrUnknown(data['intentos']!, _attemptsMeta),
       );
     }
+    if (data.containsKey('proximo_intento')) {
+      context.handle(
+        _nextAttemptAtMeta,
+        nextAttemptAt.isAcceptableOrUnknown(
+          data['proximo_intento']!,
+          _nextAttemptAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('ultimo_error')) {
+      context.handle(
+        _lastErrorMeta,
+        lastError.isAcceptableOrUnknown(data['ultimo_error']!, _lastErrorMeta),
+      );
+    }
     return context;
   }
 
@@ -2621,6 +2659,14 @@ class $SyncQueueTable extends SyncQueue
         DriftSqlType.int,
         data['${effectivePrefix}intentos'],
       )!,
+      nextAttemptAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}proximo_intento'],
+      ),
+      lastError: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}ultimo_error'],
+      ),
     );
   }
 
@@ -2637,6 +2683,14 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
   final String operation;
   final DateTime createdAt;
   final int attempts;
+
+  /// Momento a partir del cual se puede reintentar un registro que el
+  /// servidor rechazó; null si se puede enviar ya (v3).
+  final DateTime? nextAttemptAt;
+
+  /// Código del último rechazo del servidor (por ejemplo, 23514). Solo el
+  /// código: nunca el mensaje, que puede incluir datos del usuario (v3).
+  final String? lastError;
   const SyncQueueEntry({
     required this.id,
     required this.targetTable,
@@ -2644,6 +2698,8 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
     required this.operation,
     required this.createdAt,
     required this.attempts,
+    this.nextAttemptAt,
+    this.lastError,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2654,6 +2710,12 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
     map['operacion'] = Variable<String>(operation);
     map['fecha'] = Variable<DateTime>(createdAt);
     map['intentos'] = Variable<int>(attempts);
+    if (!nullToAbsent || nextAttemptAt != null) {
+      map['proximo_intento'] = Variable<DateTime>(nextAttemptAt);
+    }
+    if (!nullToAbsent || lastError != null) {
+      map['ultimo_error'] = Variable<String>(lastError);
+    }
     return map;
   }
 
@@ -2665,6 +2727,12 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
       operation: Value(operation),
       createdAt: Value(createdAt),
       attempts: Value(attempts),
+      nextAttemptAt: nextAttemptAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextAttemptAt),
+      lastError: lastError == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastError),
     );
   }
 
@@ -2680,6 +2748,8 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
       operation: serializer.fromJson<String>(json['operation']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       attempts: serializer.fromJson<int>(json['attempts']),
+      nextAttemptAt: serializer.fromJson<DateTime?>(json['nextAttemptAt']),
+      lastError: serializer.fromJson<String?>(json['lastError']),
     );
   }
   @override
@@ -2692,6 +2762,8 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
       'operation': serializer.toJson<String>(operation),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'attempts': serializer.toJson<int>(attempts),
+      'nextAttemptAt': serializer.toJson<DateTime?>(nextAttemptAt),
+      'lastError': serializer.toJson<String?>(lastError),
     };
   }
 
@@ -2702,6 +2774,8 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
     String? operation,
     DateTime? createdAt,
     int? attempts,
+    Value<DateTime?> nextAttemptAt = const Value.absent(),
+    Value<String?> lastError = const Value.absent(),
   }) => SyncQueueEntry(
     id: id ?? this.id,
     targetTable: targetTable ?? this.targetTable,
@@ -2709,6 +2783,10 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
     operation: operation ?? this.operation,
     createdAt: createdAt ?? this.createdAt,
     attempts: attempts ?? this.attempts,
+    nextAttemptAt: nextAttemptAt.present
+        ? nextAttemptAt.value
+        : this.nextAttemptAt,
+    lastError: lastError.present ? lastError.value : this.lastError,
   );
   SyncQueueEntry copyWithCompanion(SyncQueueCompanion data) {
     return SyncQueueEntry(
@@ -2720,6 +2798,10 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
       operation: data.operation.present ? data.operation.value : this.operation,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       attempts: data.attempts.present ? data.attempts.value : this.attempts,
+      nextAttemptAt: data.nextAttemptAt.present
+          ? data.nextAttemptAt.value
+          : this.nextAttemptAt,
+      lastError: data.lastError.present ? data.lastError.value : this.lastError,
     );
   }
 
@@ -2731,14 +2813,24 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
           ..write('recordId: $recordId, ')
           ..write('operation: $operation, ')
           ..write('createdAt: $createdAt, ')
-          ..write('attempts: $attempts')
+          ..write('attempts: $attempts, ')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('lastError: $lastError')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, targetTable, recordId, operation, createdAt, attempts);
+  int get hashCode => Object.hash(
+    id,
+    targetTable,
+    recordId,
+    operation,
+    createdAt,
+    attempts,
+    nextAttemptAt,
+    lastError,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2748,7 +2840,9 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
           other.recordId == this.recordId &&
           other.operation == this.operation &&
           other.createdAt == this.createdAt &&
-          other.attempts == this.attempts);
+          other.attempts == this.attempts &&
+          other.nextAttemptAt == this.nextAttemptAt &&
+          other.lastError == this.lastError);
 }
 
 class SyncQueueCompanion extends UpdateCompanion<SyncQueueEntry> {
@@ -2758,6 +2852,8 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueEntry> {
   final Value<String> operation;
   final Value<DateTime> createdAt;
   final Value<int> attempts;
+  final Value<DateTime?> nextAttemptAt;
+  final Value<String?> lastError;
   const SyncQueueCompanion({
     this.id = const Value.absent(),
     this.targetTable = const Value.absent(),
@@ -2765,6 +2861,8 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueEntry> {
     this.operation = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.attempts = const Value.absent(),
+    this.nextAttemptAt = const Value.absent(),
+    this.lastError = const Value.absent(),
   });
   SyncQueueCompanion.insert({
     this.id = const Value.absent(),
@@ -2773,6 +2871,8 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueEntry> {
     required String operation,
     required DateTime createdAt,
     this.attempts = const Value.absent(),
+    this.nextAttemptAt = const Value.absent(),
+    this.lastError = const Value.absent(),
   }) : targetTable = Value(targetTable),
        recordId = Value(recordId),
        operation = Value(operation),
@@ -2784,6 +2884,8 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueEntry> {
     Expression<String>? operation,
     Expression<DateTime>? createdAt,
     Expression<int>? attempts,
+    Expression<DateTime>? nextAttemptAt,
+    Expression<String>? lastError,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2792,6 +2894,8 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueEntry> {
       if (operation != null) 'operacion': operation,
       if (createdAt != null) 'fecha': createdAt,
       if (attempts != null) 'intentos': attempts,
+      if (nextAttemptAt != null) 'proximo_intento': nextAttemptAt,
+      if (lastError != null) 'ultimo_error': lastError,
     });
   }
 
@@ -2802,6 +2906,8 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueEntry> {
     Value<String>? operation,
     Value<DateTime>? createdAt,
     Value<int>? attempts,
+    Value<DateTime?>? nextAttemptAt,
+    Value<String?>? lastError,
   }) {
     return SyncQueueCompanion(
       id: id ?? this.id,
@@ -2810,6 +2916,8 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueEntry> {
       operation: operation ?? this.operation,
       createdAt: createdAt ?? this.createdAt,
       attempts: attempts ?? this.attempts,
+      nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
+      lastError: lastError ?? this.lastError,
     );
   }
 
@@ -2834,6 +2942,12 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueEntry> {
     if (attempts.present) {
       map['intentos'] = Variable<int>(attempts.value);
     }
+    if (nextAttemptAt.present) {
+      map['proximo_intento'] = Variable<DateTime>(nextAttemptAt.value);
+    }
+    if (lastError.present) {
+      map['ultimo_error'] = Variable<String>(lastError.value);
+    }
     return map;
   }
 
@@ -2845,7 +2959,9 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueEntry> {
           ..write('recordId: $recordId, ')
           ..write('operation: $operation, ')
           ..write('createdAt: $createdAt, ')
-          ..write('attempts: $attempts')
+          ..write('attempts: $attempts, ')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('lastError: $lastError')
           ..write(')'))
         .toString();
   }
@@ -3079,6 +3195,214 @@ class SyncMetadataCompanion extends UpdateCompanion<SyncMetadataRow> {
   }
 }
 
+class $LocalSettingsTable extends LocalSettings
+    with TableInfo<$LocalSettingsTable, LocalSettingRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LocalSettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _keyMeta = const VerificationMeta('key');
+  @override
+  late final GeneratedColumn<String> key = GeneratedColumn<String>(
+    'clave',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
+  @override
+  late final GeneratedColumn<String> value = GeneratedColumn<String>(
+    'valor',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [key, value];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'ajustes_locales';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LocalSettingRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('clave')) {
+      context.handle(
+        _keyMeta,
+        key.isAcceptableOrUnknown(data['clave']!, _keyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_keyMeta);
+    }
+    if (data.containsKey('valor')) {
+      context.handle(
+        _valueMeta,
+        value.isAcceptableOrUnknown(data['valor']!, _valueMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_valueMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {key};
+  @override
+  LocalSettingRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LocalSettingRow(
+      key: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}clave'],
+      )!,
+      value: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}valor'],
+      )!,
+    );
+  }
+
+  @override
+  $LocalSettingsTable createAlias(String alias) {
+    return $LocalSettingsTable(attachedDatabase, alias);
+  }
+}
+
+class LocalSettingRow extends DataClass implements Insertable<LocalSettingRow> {
+  final String key;
+  final String value;
+  const LocalSettingRow({required this.key, required this.value});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['clave'] = Variable<String>(key);
+    map['valor'] = Variable<String>(value);
+    return map;
+  }
+
+  LocalSettingsCompanion toCompanion(bool nullToAbsent) {
+    return LocalSettingsCompanion(key: Value(key), value: Value(value));
+  }
+
+  factory LocalSettingRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LocalSettingRow(
+      key: serializer.fromJson<String>(json['key']),
+      value: serializer.fromJson<String>(json['value']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'key': serializer.toJson<String>(key),
+      'value': serializer.toJson<String>(value),
+    };
+  }
+
+  LocalSettingRow copyWith({String? key, String? value}) =>
+      LocalSettingRow(key: key ?? this.key, value: value ?? this.value);
+  LocalSettingRow copyWithCompanion(LocalSettingsCompanion data) {
+    return LocalSettingRow(
+      key: data.key.present ? data.key.value : this.key,
+      value: data.value.present ? data.value.value : this.value,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalSettingRow(')
+          ..write('key: $key, ')
+          ..write('value: $value')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(key, value);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LocalSettingRow &&
+          other.key == this.key &&
+          other.value == this.value);
+}
+
+class LocalSettingsCompanion extends UpdateCompanion<LocalSettingRow> {
+  final Value<String> key;
+  final Value<String> value;
+  final Value<int> rowid;
+  const LocalSettingsCompanion({
+    this.key = const Value.absent(),
+    this.value = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LocalSettingsCompanion.insert({
+    required String key,
+    required String value,
+    this.rowid = const Value.absent(),
+  }) : key = Value(key),
+       value = Value(value);
+  static Insertable<LocalSettingRow> custom({
+    Expression<String>? key,
+    Expression<String>? value,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (key != null) 'clave': key,
+      if (value != null) 'valor': value,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LocalSettingsCompanion copyWith({
+    Value<String>? key,
+    Value<String>? value,
+    Value<int>? rowid,
+  }) {
+    return LocalSettingsCompanion(
+      key: key ?? this.key,
+      value: value ?? this.value,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (key.present) {
+      map['clave'] = Variable<String>(key.value);
+    }
+    if (value.present) {
+      map['valor'] = Variable<String>(value.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalSettingsCompanion(')
+          ..write('key: $key, ')
+          ..write('value: $value, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3088,9 +3412,18 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ReceiptsTable receipts = $ReceiptsTable(this);
   late final $SyncQueueTable syncQueue = $SyncQueueTable(this);
   late final $SyncMetadataTable syncMetadata = $SyncMetadataTable(this);
+  late final $LocalSettingsTable localSettings = $LocalSettingsTable(this);
   late final Index idxMovimientosFecha = Index(
     'idx_movimientos_fecha',
     'CREATE INDEX idx_movimientos_fecha ON movimientos (fecha)',
+  );
+  late final Index idxPresupuestosCategoriaMesActivo = Index(
+    'idx_presupuestos_categoria_mes_activo',
+    'CREATE UNIQUE INDEX idx_presupuestos_categoria_mes_activo ON presupuestos (categoria_id, mes) WHERE eliminado_en IS NULL',
+  );
+  late final Index idxRecibosMovimientoActivo = Index(
+    'idx_recibos_movimiento_activo',
+    'CREATE UNIQUE INDEX idx_recibos_movimiento_activo ON recibos (movimiento_id) WHERE eliminado_en IS NULL',
   );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -3103,7 +3436,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     receipts,
     syncQueue,
     syncMetadata,
+    localSettings,
     idxMovimientosFecha,
+    idxPresupuestosCategoriaMesActivo,
+    idxRecibosMovimientoActivo,
   ];
   @override
   DriftDatabaseOptions get options =>
@@ -4523,7 +4859,7 @@ typedef $$ReceiptsTableCreateCompanionBuilder = ReceiptsCompanion Function({
   Value<String> syncStatus,
   required String id,
   required String movementId,
-  required String localPath,
+  Value<String?> localPath,
   Value<int?> detectedTotal,
   Value<String?> detectedMerchant,
   Value<int> rowid,
@@ -4535,7 +4871,7 @@ typedef $$ReceiptsTableUpdateCompanionBuilder = ReceiptsCompanion Function({
   Value<String> syncStatus,
   Value<String> id,
   Value<String> movementId,
-  Value<String> localPath,
+  Value<String?> localPath,
   Value<int?> detectedTotal,
   Value<String?> detectedMerchant,
   Value<int> rowid,
@@ -4806,7 +5142,7 @@ class $$ReceiptsTableTableManager
                 Value<String> syncStatus = const Value.absent(),
                 Value<String> id = const Value.absent(),
                 Value<String> movementId = const Value.absent(),
-                Value<String> localPath = const Value.absent(),
+                Value<String?> localPath = const Value.absent(),
                 Value<int?> detectedTotal = const Value.absent(),
                 Value<String?> detectedMerchant = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -4830,7 +5166,7 @@ class $$ReceiptsTableTableManager
                 Value<String> syncStatus = const Value.absent(),
                 required String id,
                 required String movementId,
-                required String localPath,
+                Value<String?> localPath = const Value.absent(),
                 Value<int?> detectedTotal = const Value.absent(),
                 Value<String?> detectedMerchant = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -4918,6 +5254,8 @@ typedef $$SyncQueueTableCreateCompanionBuilder = SyncQueueCompanion Function({
   required String operation,
   required DateTime createdAt,
   Value<int> attempts,
+  Value<DateTime?> nextAttemptAt,
+  Value<String?> lastError,
 });
 typedef $$SyncQueueTableUpdateCompanionBuilder = SyncQueueCompanion Function({
   Value<int> id,
@@ -4926,6 +5264,8 @@ typedef $$SyncQueueTableUpdateCompanionBuilder = SyncQueueCompanion Function({
   Value<String> operation,
   Value<DateTime> createdAt,
   Value<int> attempts,
+  Value<DateTime?> nextAttemptAt,
+  Value<String?> lastError,
 });
 
 class $$SyncQueueTableFilterComposer
@@ -4964,6 +5304,16 @@ class $$SyncQueueTableFilterComposer
 
   ColumnFilters<int> get attempts => $composableBuilder(
     column: $table.attempts,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastError => $composableBuilder(
+    column: $table.lastError,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -5006,6 +5356,16 @@ class $$SyncQueueTableOrderingComposer
     column: $table.attempts,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<DateTime> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$SyncQueueTableAnnotationComposer
@@ -5036,6 +5396,14 @@ class $$SyncQueueTableAnnotationComposer
 
   GeneratedColumn<int> get attempts =>
       $composableBuilder(column: $table.attempts, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastError =>
+      $composableBuilder(column: $table.lastError, builder: (column) => column);
 }
 
 class $$SyncQueueTableTableManager
@@ -5075,6 +5443,8 @@ class $$SyncQueueTableTableManager
                 Value<String> operation = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> attempts = const Value.absent(),
+                Value<DateTime?> nextAttemptAt = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
               }) => SyncQueueCompanion(
                 id: id,
                 targetTable: targetTable,
@@ -5082,6 +5452,8 @@ class $$SyncQueueTableTableManager
                 operation: operation,
                 createdAt: createdAt,
                 attempts: attempts,
+                nextAttemptAt: nextAttemptAt,
+                lastError: lastError,
               ),
           createCompanionCallback:
               ({
@@ -5091,6 +5463,8 @@ class $$SyncQueueTableTableManager
                 required String operation,
                 required DateTime createdAt,
                 Value<int> attempts = const Value.absent(),
+                Value<DateTime?> nextAttemptAt = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
               }) => SyncQueueCompanion.insert(
                 id: id,
                 targetTable: targetTable,
@@ -5098,6 +5472,8 @@ class $$SyncQueueTableTableManager
                 operation: operation,
                 createdAt: createdAt,
                 attempts: attempts,
+                nextAttemptAt: nextAttemptAt,
+                lastError: lastError,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -5289,6 +5665,153 @@ typedef $$SyncMetadataTableProcessedTableManager =
       SyncMetadataRow,
       PrefetchHooks Function()
     >;
+typedef $$LocalSettingsTableCreateCompanionBuilder =
+    LocalSettingsCompanion Function({
+      required String key,
+      required String value,
+      Value<int> rowid,
+    });
+typedef $$LocalSettingsTableUpdateCompanionBuilder =
+    LocalSettingsCompanion Function({
+      Value<String> key,
+      Value<String> value,
+      Value<int> rowid,
+    });
+
+class $$LocalSettingsTableFilterComposer
+    extends Composer<_$AppDatabase, $LocalSettingsTable> {
+  $$LocalSettingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LocalSettingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $LocalSettingsTable> {
+  $$LocalSettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LocalSettingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LocalSettingsTable> {
+  $$LocalSettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get key =>
+      $composableBuilder(column: $table.key, builder: (column) => column);
+
+  GeneratedColumn<String> get value =>
+      $composableBuilder(column: $table.value, builder: (column) => column);
+}
+
+class $$LocalSettingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LocalSettingsTable,
+          LocalSettingRow,
+          $$LocalSettingsTableFilterComposer,
+          $$LocalSettingsTableOrderingComposer,
+          $$LocalSettingsTableAnnotationComposer,
+          $$LocalSettingsTableCreateCompanionBuilder,
+          $$LocalSettingsTableUpdateCompanionBuilder,
+          (
+            LocalSettingRow,
+            BaseReferences<_$AppDatabase, $LocalSettingsTable, LocalSettingRow>,
+          ),
+          LocalSettingRow,
+          PrefetchHooks Function()
+        > {
+  $$LocalSettingsTableTableManager(_$AppDatabase db, $LocalSettingsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LocalSettingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LocalSettingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LocalSettingsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> key = const Value.absent(),
+            Value<String> value = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) => LocalSettingsCompanion(key: key, value: value, rowid: rowid),
+          createCompanionCallback:
+              ({
+                required String key,
+                required String value,
+                Value<int> rowid = const Value.absent(),
+              }) => LocalSettingsCompanion.insert(
+                key: key,
+                value: value,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$LocalSettingsTable, LocalSettingRow>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $LocalSettingsTable,
+                    LocalSettingRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LocalSettingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LocalSettingsTable,
+      LocalSettingRow,
+      $$LocalSettingsTableFilterComposer,
+      $$LocalSettingsTableOrderingComposer,
+      $$LocalSettingsTableAnnotationComposer,
+      $$LocalSettingsTableCreateCompanionBuilder,
+      $$LocalSettingsTableUpdateCompanionBuilder,
+      (
+        LocalSettingRow,
+        BaseReferences<_$AppDatabase, $LocalSettingsTable, LocalSettingRow>,
+      ),
+      LocalSettingRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -5305,4 +5828,6 @@ class $AppDatabaseManager {
       $$SyncQueueTableTableManager(_db, _db.syncQueue);
   $$SyncMetadataTableTableManager get syncMetadata =>
       $$SyncMetadataTableTableManager(_db, _db.syncMetadata);
+  $$LocalSettingsTableTableManager get localSettings =>
+      $$LocalSettingsTableTableManager(_db, _db.localSettings);
 }

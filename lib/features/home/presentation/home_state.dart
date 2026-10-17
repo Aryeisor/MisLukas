@@ -71,6 +71,7 @@ class HomeMovementItem {
     required this.category,
     required this.dateLabel,
     required this.amount,
+    this.isPendingSync = false,
   });
 
   final String id;
@@ -78,4 +79,7 @@ class HomeMovementItem {
   final CategoryKind category;
   final String dateLabel;
   final int amount;
+
+  /// Aún no llega a la nube (pendiente o rechazado por el servidor).
+  final bool isPendingSync;
 }

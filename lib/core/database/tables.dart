@@ -64,7 +64,13 @@ class Movements extends Table with SyncedColumns {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+/// Un presupuesto activo por categoría y mes. Los eliminados (borrado lógico)
+/// no cuentan, para poder crear otro después.
 @DataClassName('BudgetRow')
+@TableIndex.sql(
+  'CREATE UNIQUE INDEX idx_presupuestos_categoria_mes_activo '
+  'ON presupuestos (categoria_id, mes) WHERE eliminado_en IS NULL',
+)
 class Budgets extends Table with SyncedColumns {
   @override
   String get tableName => 'presupuestos';
@@ -80,25 +86,26 @@ class Budgets extends Table with SyncedColumns {
 
   @override
   Set<Column<Object>> get primaryKey => {id};
-
-  /// Un presupuesto por categoría y mes.
-  @override
-  List<Set<Column<Object>>> get uniqueKeys => [
-    {categoryId, month},
-  ];
 }
 
+/// Un recibo activo por movimiento; los eliminados no cuentan.
 @DataClassName('ReceiptRow')
+@TableIndex.sql(
+  'CREATE UNIQUE INDEX idx_recibos_movimiento_activo '
+  'ON recibos (movimiento_id) WHERE eliminado_en IS NULL',
+)
 class Receipts extends Table with SyncedColumns {
   @override
   String get tableName => 'recibos';
 
   TextColumn get id => text()();
 
-  /// Un recibo por movimiento.
   TextColumn get movementId =>
-      text().named('movimiento_id').unique().references(Movements, #id)();
-  TextColumn get localPath => text().named('ruta_local')();
+      text().named('movimiento_id').references(Movements, #id)();
+
+  /// Imagen en el almacenamiento interno de la app. Null si el recibo llegó
+  /// del servidor y la imagen no está en este dispositivo.
+  TextColumn get localPath => text().named('ruta_local').nullable()();
   IntColumn get detectedTotal =>
       integer().named('total_detectado').nullable()();
   TextColumn get detectedMerchant =>
@@ -123,6 +130,15 @@ class SyncQueue extends Table {
   DateTimeColumn get createdAt => dateTime().named('fecha')();
   IntColumn get attempts =>
       integer().named('intentos').withDefault(const Constant(0))();
+
+  /// Momento a partir del cual se puede reintentar un registro que el
+  /// servidor rechazó; null si se puede enviar ya (v3).
+  DateTimeColumn get nextAttemptAt =>
+      dateTime().named('proximo_intento').nullable()();
+
+  /// Código del último rechazo del servidor (por ejemplo, 23514). Solo el
+  /// código: nunca el mensaje, que puede incluir datos del usuario (v3).
+  TextColumn get lastError => text().named('ultimo_error').nullable()();
 }
 
 /// Última sincronización de cada tabla (docs/06 §6.4.3).
@@ -137,4 +153,18 @@ class SyncMetadata extends Table {
 
   @override
   Set<Column<Object>> get primaryKey => {targetTable};
+}
+
+/// Ajustes de este dispositivo, como la marca de la bienvenida (v4). No se
+/// sincronizan: se borran con el resto de los datos locales.
+@DataClassName('LocalSettingRow')
+class LocalSettings extends Table {
+  @override
+  String get tableName => 'ajustes_locales';
+
+  TextColumn get key => text().named('clave')();
+  TextColumn get value => text().named('valor')();
+
+  @override
+  Set<Column<Object>> get primaryKey => {key};
 }

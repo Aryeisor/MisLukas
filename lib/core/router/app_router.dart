@@ -1,30 +1,85 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/auth/presentation/account_session_controller.dart';
 import '../../features/auth/presentation/login_screen.dart';
+import '../../features/auth/presentation/password_recovery_flow.dart';
+import '../../features/auth/presentation/recover_password_screen.dart';
+import '../../features/auth/presentation/verify_email_screen.dart';
+import '../../features/budgets/presentation/budgets_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
+import '../../features/movements/domain/entities/movement.dart';
 import '../../features/movements/presentation/confirm_movement_screen.dart';
 import '../../features/movements/presentation/confirm_movement_view_model.dart';
+import '../../features/movements/presentation/history/history_screen.dart';
 import '../../features/movements/presentation/movement_entry_method.dart';
 import '../../features/movements/presentation/new_movement_screen.dart';
+import '../../features/onboarding/presentation/welcome_screen.dart';
+import '../../features/profile/presentation/delete_account_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
 import '../../features/simulator/presentation/simulator_screen.dart';
 import '../widgets/dev/component_gallery_screen.dart';
 import 'app_routes.dart';
+import 'auth_redirect.dart';
 import 'main_shell.dart';
 
-/// Router de la aplicación.
+/// Navegador raíz: los avisos globales (por ejemplo, datos de otra cuenta)
+/// abren sus diálogos aquí, sin depender de la pantalla visible.
+final rootNavigatorKeyProvider = Provider<GlobalKey<NavigatorState>>(
+  (ref) => GlobalKey<NavigatorState>(debugLabel: 'raiz'),
+);
+
+/// Router de la aplicación. El redirect decide la pantalla según la sesión
+/// (docs/05 §5.1) y se vuelve a evaluar cada vez que la sesión cambia.
 final appRouterProvider = Provider<GoRouter>((ref) {
+  // La sesión guardada ya se cargó al iniciar Supabase: se conoce sin red.
+  // Solo cuenta como sesión cuando la base local es de ese usuario: si es de
+  // otro, el usuario se queda en el login hasta confirmar que se borra.
+  final signedIn = ValueNotifier<bool>(
+    ref.read(accountSessionProvider) == AccountSessionStatus.ready,
+  );
+  ref.listen(accountSessionProvider, (_, next) {
+    signedIn.value = next == AccountSessionStatus.ready;
+  });
+  // Recuperación de contraseña en curso: con la sesión temporal no se sale
+  // de la pantalla de recuperación.
+  final recoveryInProgress = ValueNotifier<bool>(
+    ref.read(passwordRecoveryInProgressProvider),
+  );
+  ref.listen(passwordRecoveryInProgressProvider, (_, next) {
+    recoveryInProgress.value = next;
+  });
+
   final router = GoRouter(
-    initialLocation: AppRoutes.login,
-    // Fase 5: agregar el redirect según la sesión guardada en el almacenamiento
-    // seguro: sin sesión -> /login; con sesión -> desbloqueo -> /home.
+    navigatorKey: ref.read(rootNavigatorKeyProvider),
+    initialLocation: AppRoutes.home,
+    refreshListenable: Listenable.merge([signedIn, recoveryInProgress]),
+    // Con rutas apiladas (push), go_router evalúa aquí la ruta base: desde la
+    // recuperación llega /login, no /recover.
+    redirect: (context, state) => authRedirect(
+      location: state.matchedLocation,
+      signedIn: signedIn.value,
+      recoveryInProgress: recoveryInProgress.value,
+    ),
     routes: [
       GoRoute(
         path: AppRoutes.login,
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.verifyEmail,
+        // Sin correo (por ejemplo, al reabrir la ruta) se vuelve al login.
+        redirect: (context, state) =>
+            state.extra is String ? null : AppRoutes.login,
+        builder: (context, state) =>
+            VerifyEmailScreen(email: state.extra! as String),
+      ),
+      GoRoute(
+        path: AppRoutes.recoverPassword,
+        builder: (context, state) => const RecoverPasswordScreen(),
       ),
       // Pestañas principales: cada rama conserva su estado y comparte la barra inferior.
       StatefulShellRoute.indexedStack(
@@ -65,10 +120,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
-      // Flujo de nuevo gasto: fuera del shell, a pantalla completa sin barra inferior.
+      // Flujo de nuevo movimiento: fuera del shell, a pantalla completa sin
+      // barra inferior.
       GoRoute(
         path: AppRoutes.newMovement,
-        builder: (context, state) => const NewMovementScreen(),
+        builder: (context, state) => NewMovementScreen(
+          initialType:
+              state.uri.queryParameters[AppRoutes.typeParam] ==
+                  AppRoutes.incomeType
+              ? MovementType.income
+              : MovementType.expense,
+        ),
       ),
       GoRoute(
         path: AppRoutes.confirmMovement,
@@ -86,6 +148,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           mode: EditMovementMode(state.pathParameters[AppRoutes.idParam]!),
         ),
       ),
+      GoRoute(
+        path: AppRoutes.history,
+        builder: (context, state) => const HistoryScreen(),
+      ),
+      // Se abre con push (WelcomeLauncher), encima de lo que esté visible.
+      GoRoute(
+        path: AppRoutes.welcome,
+        builder: (context, state) => const WelcomeScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.deleteAccount,
+        builder: (context, state) => const DeleteAccountScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.budgets,
+        builder: (context, state) => const BudgetsScreen(),
+      ),
       if (kDebugMode)
         GoRoute(
           path: AppRoutes.devComponents,
@@ -94,6 +173,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 
-  ref.onDispose(router.dispose);
+  ref.onDispose(() {
+    router.dispose();
+    signedIn.dispose();
+    recoveryInProgress.dispose();
+  });
   return router;
 });

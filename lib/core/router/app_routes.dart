@@ -2,15 +2,46 @@
 abstract final class AppRoutes {
   static const String login = '/login';
 
+  /// "Verifica tu correo" después del registro (diagrama 5.1, C2). Recibe el
+  /// correo en `extra`, no en la URL.
+  static const String verifyEmail = '/verify-email';
+
+  /// Recuperación de contraseña (pantalla 3).
+  static const String recoverPassword = '/recover';
+
   // Pestañas de la barra inferior
   static const String home = '/home';
   static const String reports = '/reports';
   static const String simulator = '/simulator';
   static const String profile = '/profile';
 
-  // Flujo de nuevo gasto, a pantalla completa
+  /// Eliminar la cuenta (RF-48), a pantalla completa.
+  static const String deleteAccount = '/profile/delete-account';
+
+  /// Presupuestos del mes (RF-52), a pantalla completa. Se abre desde Perfil.
+  static const String budgets = '/profile/budgets';
+
+  /// Bienvenida para usuarios nuevos (RF-51), a pantalla completa.
+  static const String welcome = '/welcome';
+
+  // Flujo de nuevo movimiento, a pantalla completa
   static const String newMovement = '/movements/new';
+
+  /// Parámetro de [newMovement] con el tipo inicial: income abre Ingreso.
+  static const String typeParam = 'type';
+
+  /// Valor de [typeParam] para abrir Nuevo movimiento con Ingreso.
+  static const String incomeType = 'income';
+
+  /// Nuevo movimiento con Ingreso seleccionado.
+  static String newIncome() => Uri(
+    path: newMovement,
+    queryParameters: {typeParam: incomeType},
+  ).toString();
   static const String confirmMovement = '/movements/confirm';
+
+  /// Historial de movimientos (RF-22), a pantalla completa.
+  static const String history = '/movements/history';
 
   /// Edición de un movimiento existente (RF-23), a pantalla completa.
   static const String editMovement = '/movements/:$idParam/edit';
@@ -26,9 +57,10 @@ abstract final class AppRoutes {
   static const String methodParam = 'method';
 
   /// Ruta de confirmación con su método de registro.
-  static String confirmMovementWith(String method) =>
-      Uri(path: confirmMovement, queryParameters: {methodParam: method})
-          .toString();
+  static String confirmMovementWith(String method) => Uri(
+    path: confirmMovement,
+    queryParameters: {methodParam: method},
+  ).toString();
 
   /// Galería de componentes, solo en modo debug.
   static const String devComponents = '/dev/components';

@@ -8,6 +8,7 @@ export 'app_bottom_nav.dart';
 export 'app_card.dart';
 export 'app_checkbox_tile.dart';
 export 'app_chip.dart';
+export 'app_code_field.dart';
 export 'app_confirm_dialog.dart';
 export 'app_donut_chart.dart';
 export 'app_empty_state.dart';

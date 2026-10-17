@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'provisional_user.dart';
+import '../../auth/data/auth_providers.dart';
+import '../../auth/domain/auth_failure.dart';
+import '../../auth/presentation/account_session_controller.dart';
 
 /// Estado inmutable del Perfil provisional.
 class ProfileState {
@@ -8,6 +10,9 @@ class ProfileState {
     required this.fullName,
     required this.email,
     required this.initials,
+    this.isSigningOut = false,
+    this.signOutFailure,
+    this.unsyncedOnSignOut,
   });
 
   final String fullName;
@@ -15,23 +20,86 @@ class ProfileState {
 
   /// Iniciales para el avatar: "CR".
   final String initials;
+
+  final bool isSigningOut;
+
+  /// Error al cerrar sesión; null si no hubo error.
+  final AuthFailure? signOutFailure;
+
+  /// Cambios que no se pudieron enviar antes de cerrar sesión: el usuario
+  /// debe confirmar que se pierden. Null si no hay nada que confirmar.
+  final int? unsyncedOnSignOut;
+
+  ProfileState copyWith({
+    bool? isSigningOut,
+    AuthFailure? Function()? signOutFailure,
+    int? Function()? unsyncedOnSignOut,
+  }) {
+    return ProfileState(
+      fullName: fullName,
+      email: email,
+      initials: initials,
+      isSigningOut: isSigningOut ?? this.isSigningOut,
+      signOutFailure: signOutFailure != null
+          ? signOutFailure()
+          : this.signOutFailure,
+      unsyncedOnSignOut: unsyncedOnSignOut != null
+          ? unsyncedOnSignOut()
+          : this.unsyncedOnSignOut,
+    );
+  }
 }
 
 final profileViewModelProvider =
     NotifierProvider<ProfileViewModel, ProfileState>(ProfileViewModel.new);
 
-/// ViewModel del Perfil provisional. Muestra la usuaria provisional hasta la
-/// Fase 5. El perfil completo (cuenta, seguridad, sincronización y
-/// eliminación de cuenta) llega en una próxima versión.
+/// ViewModel del Perfil provisional: datos del usuario con sesión y cierre de
+/// sesión. El perfil completo (cuenta, seguridad y preferencias) llega en una
+/// próxima versión.
 class ProfileViewModel extends Notifier<ProfileState> {
   @override
   ProfileState build() {
+    final user = ref.watch(currentUserProvider);
+    final name = user?.name ?? '';
+    final email = user?.email ?? '';
     return ProfileState(
-      fullName: provisionalUserFullName,
-      email: provisionalUserEmail,
-      initials: initialsOf(provisionalUserFullName),
+      fullName: name,
+      email: email,
+      // Sin nombre, la inicial del correo.
+      initials: initialsOf(name.isNotEmpty ? name : email),
     );
   }
+
+  /// Cierra la sesión y borra los datos de este dispositivo (RF-13). Antes
+  /// intenta enviar los cambios pendientes; si quedan, pide confirmación
+  /// ([ProfileState.unsyncedOnSignOut]) salvo con [force]. El router vuelve
+  /// al login.
+  Future<void> signOut({bool force = false}) async {
+    if (state.isSigningOut) return;
+    state = state.copyWith(
+      isSigningOut: true,
+      signOutFailure: () => null,
+      unsyncedOnSignOut: () => null,
+    );
+    final outcome = await ref
+        .read(accountActionsProvider)
+        .signOut(force: force);
+    if (!ref.mounted) return;
+    state = switch (outcome) {
+      SignOutDone() => state.copyWith(isSigningOut: false),
+      SignOutHasPending(:final count) => state.copyWith(
+        isSigningOut: false,
+        unsyncedOnSignOut: () => count,
+      ),
+      SignOutFailed(:final failure) => state.copyWith(
+        isSigningOut: false,
+        signOutFailure: () => failure,
+      ),
+    };
+  }
+
+  /// El usuario decidió no cerrar sesión para no perder sus cambios.
+  void keepSession() => state = state.copyWith(unsyncedOnSignOut: () => null);
 }
 
 /// Iniciales del primer nombre y del primer apellido, en mayúscula:

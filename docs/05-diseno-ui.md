@@ -6,7 +6,7 @@ Los bocetos se construyeron en Figma a partir de un sistema visual común, de mo
 
 ## 5.1 Flujo de navegación
 
-La navegación de MisLukas se organiza en tres bloques: el acceso, que decide si el usuario debe iniciar sesión o solo desbloquear la app; la navegación principal, con una barra inferior de cuatro pestañas; y el flujo de registro de un gasto, que se abre desde la pantalla de inicio y regresa a ella al terminar.
+La navegación de MisLukas se organiza en tres bloques: el acceso, que decide si el usuario debe iniciar sesión o solo desbloquear la app; la navegación principal, con una barra inferior de cuatro pestañas; y el flujo de registro de un movimiento (gasto o ingreso), que se abre desde la pantalla de inicio y regresa a ella al terminar. Un usuario nuevo ve además, una sola vez, la bienvenida.
 
 **Decisión al abrir la aplicación.** Cada vez que el usuario abre MisLukas, la aplicación revisa si existe una sesión guardada en el almacenamiento seguro del dispositivo:
 
@@ -17,7 +17,11 @@ Esta decisión evita dos problemas opuestos: pedir la contraseña cada vez, lo q
 
 **Navegación principal.** Una vez dentro, la barra inferior da acceso directo a las cuatro secciones de la aplicación: Inicio, Reportes, Simular y Perfil. Se eligió una barra inferior y no un menú lateral porque las cuatro secciones son de uso frecuente y deben estar siempre a un toque y al alcance del pulgar.
 
-**Flujo de nuevo gasto.** Desde Inicio, el botón "Nuevo gasto" abre la selección del método de registro. Ambos métodos terminan en la pantalla de confirmación, y al guardar el usuario regresa a Inicio con un mensaje de confirmación.
+**Flujo de nuevo movimiento.** Desde Inicio, el botón "Nuevo movimiento" abre una pantalla con el selector Gasto | Ingreso. Con Gasto, el usuario elige el método de registro; ambos métodos terminan en la pantalla de confirmación. Con Ingreso, escribe el valor, la descripción y la fecha en la misma pantalla. Al guardar, regresa a Inicio con un mensaje de confirmación.
+
+**Historial y presupuestos.** Desde Inicio, "Ver todos" abre el historial de movimientos; tocar un movimiento abre su edición. Desde Perfil, en Preferencias, "Presupuestos" abre los presupuestos del mes. Las dos pantallas se abren encima de la navegación principal y vuelven a donde estaba el usuario.
+
+**Bienvenida.** La primera vez que entra un usuario sin ningún dato propio, después de la primera sincronización exitosa, se abre la bienvenida encima de Inicio. Al terminarla u omitirla, vuelve a donde estaba.
 
 **Diagrama de flujo.** El siguiente código genera el diagrama en Mermaid. Se puede renderizar en mermaid.live o en FigJam y exportar como imagen para el documento.
 
@@ -35,7 +39,16 @@ flowchart TD
     C -- "Iniciar sesión" --> E["Inicio"]
     D -- "Desbloqueo correcto" --> E
     D -- "Cerrar sesión" --> C
-    E -- "Nuevo gasto" --> F["Nuevo gasto: elegir método"]
+    E -. "Usuario nuevo, después de sincronizar" .-> W1["Bienvenida: ingresos del mes"]
+    W1 -- "Continuar u Omitir" --> W2["Bienvenida: presupuestos"]
+    W2 -- "Guardar u Omitir" --> E
+    E -- "Ver todos" --> HI["Historial"]
+    HI -- "Tocar un movimiento" --> ED["Editar movimiento"]
+    ED -- "Guardar o eliminar" --> HI
+    E -- "Nuevo movimiento" --> F0{"Gasto | Ingreso"}
+    F0 -- "Gasto" --> F["Nuevo gasto: elegir método"]
+    F0 -- "Ingreso" --> F2["Nuevo ingreso: valor, descripción y fecha"]
+    F2 -- "Guardar ingreso" --> E
     F -- "Foto del recibo" --> G["Cámara / galería"]
     G --> H["Confirma los datos"]
     F -- "Registro manual" --> H2["Registra tu gasto"]
@@ -48,6 +61,8 @@ flowchart TD
     I --> N
     J --> N
     K -- "Cerrar sesión" --> C
+    K -- "Presupuestos" --> PR["Presupuestos del mes"]
+    PR --> K
 ```
 
 ![Figura 5.1. Flujo de navegación](img/fig-5-1-flujo-navegacion.png)
@@ -153,37 +168,48 @@ _Figura 5.4. Captura de la pantalla de inicio_
 - **Tarjeta principal** en azul con el texto "Disponible este mes" y el monto \$1.874.320 en tamaño grande. Debajo, los dos valores que lo componen: ingresos por \$4.250.000 con una flecha hacia arriba y gastos por \$2.375.680 con una flecha hacia abajo.
 - **Alerta de presupuesto** en amarillo con un ícono de advertencia: "Presupuesto de mercado al 78%. Te quedan \$253.000 para fin de mes".
 - **Sección "Últimos movimientos"** con el enlace "Ver todos". Cada movimiento se muestra en una tarjeta con el ícono de su categoría sobre un fondo de color, el nombre del comercio o concepto, la categoría y la fecha en gris, y el monto a la derecha: negro con signo menos para los gastos y verde con signo más para los ingresos.
-- **Botón "+ Nuevo gasto"** de ancho completo, ubicado sobre la barra de navegación.
+- **Botón "+ Nuevo movimiento"** de ancho completo, ubicado sobre la barra de navegación. El boceto dice "Nuevo gasto"; se cambió para que el registro de ingresos (pantalla 6) no quede escondido detrás de un botón de gastos.
 - **Barra de navegación inferior** con Inicio activo.
 
 **Acciones.**
 
-- Registrar un nuevo gasto.
+- Registrar un nuevo gasto o ingreso.
 - Ver el historial completo de movimientos.
 - Tocar un movimiento para ver su detalle, editarlo o eliminarlo.
 - Navegar a las demás secciones.
 
 **Decisiones de diseño.** La pantalla sigue un orden de lectura de lo general a lo particular: primero el disponible, luego lo que requiere atención (la alerta) y por último el detalle (los movimientos). Mostrar los ingresos y los gastos junto al disponible le permite al usuario entender de dónde sale esa cifra sin tener que calcularla. El botón de nuevo gasto se ubica en la zona inferior, la más fácil de alcanzar con el pulgar, porque es la acción que más se repite en la aplicación.
 
-**Pantalla 6. Nuevo gasto**
+**Pantalla 6. Nuevo movimiento**
 
 ![fig-5-5-nuevo-gasto](img/fig-5-5-nuevo-gasto.png)
 
 _Figura 5.5. Captura de la pantalla de nuevo gasto_
 
-**Objetivo.** Permitir que el usuario elija cómo registrar el gasto, guiándolo hacia el método más rápido.
+**Objetivo.** Permitir que el usuario elija si registra un gasto o un ingreso y, para un gasto, cómo registrarlo, guiándolo hacia el método más rápido.
 
 **Elementos.**
 
-- Encabezado "Nuevo gasto" con la pregunta "¿Cómo quieres registrarlo?" y un botón para cerrar.
+- Encabezado "Nuevo gasto" con la pregunta "¿Cómo quieres registrarlo?" y un botón para cerrar. Con Ingreso, el encabezado cambia a "Nuevo ingreso" y la pregunta a "¿Cuánto dinero recibiste?".
+- **Selector Gasto | Ingreso** debajo del encabezado, con el mismo componente de las pestañas de inicio de sesión (la opción activa con fondo blanco). Gasto viene seleccionado. Cada opción mide al menos 48 dp de alto y el lector de pantalla anuncia "Tipo de movimiento", el nombre de la opción y si está seleccionada.
 - Tarjeta **"Foto del recibo"** con ícono de cámara, etiqueta "Recomendado" y la descripción "La app extrae el valor y sugiere la categoría automáticamente". Aparece seleccionada por defecto, con borde azul y fondo azul muy claro.
 - Tarjeta **"Registro manual"** con ícono de lápiz y la descripción "Escribe el valor y elige la categoría tú mismo".
 - Indicador de selección tipo radio a la derecha de cada tarjeta.
 - Botón "Continuar" en la parte inferior.
 
+**Variante Ingreso.** Al elegir Ingreso desaparecen las tarjetas de método (un ingreso no tiene recibo) y aparece el formulario en la misma pantalla:
+
+- Campo **VALOR DEL INGRESO**, el mismo campo grande de montos del gasto.
+- Campo **DESCRIPCIÓN** con el ejemplo "Ej: Salario, Prima, Freelance". Si queda vacío, el ingreso se llama "Ingreso".
+- **FECHA**: un botón con el día elegido ("Hoy, 17 de octubre") que abre el calendario del sistema, en español, hasta el día de hoy. No se pueden elegir fechas futuras, igual que en un gasto.
+- Botón "Guardar ingreso", deshabilitado hasta que el valor sea mayor que cero.
+
+No hay selección de categoría: el ingreso usa siempre la categoría Ingreso. Al guardar, se vuelve a Inicio con el mensaje "Ingreso guardado", y el ingreso aparece en verde y con signo más.
+
 **Acciones.**
 
-- Seleccionar un método y continuar.
+- Elegir Gasto o Ingreso.
+- Seleccionar un método y continuar (gasto), o completar y guardar el ingreso.
 - Cerrar la pantalla y volver a Inicio.
 
 **Decisiones de diseño.** La foto del recibo viene seleccionada por defecto porque es el método que queremos promover: es el que reduce la fricción del registro, que es el problema central que la aplicación busca resolver. Aun así, el usuario tiene el control y puede cambiar de opción con un toque. Cada opción incluye una descripción breve para que quien use la aplicación por primera vez sepa qué esperar de cada método.
@@ -206,16 +232,22 @@ _Figura 5.7. Captura de la variante de registro manual_
 - Vista previa del recibo sobre fondo oscuro, con el nombre del comercio, el NIT, los productos con sus precios y la línea del total resaltada en azul con la etiqueta "Área detectada".
 - Campo **VALOR DETECTADO** con el monto (\$ 87.400) en tamaño grande y editable.
 - **CATEGORÍA SUGERIDA** con chips seleccionables: Mercado, Transporte, Ocio, Servicios y Restaurantes. La categoría sugerida aparece marcada.
+- **FECHA**: el mismo botón del ingreso, con el día elegido ("Hoy, 17 de octubre"), que abre el calendario del sistema hasta el día de hoy. Por defecto es hoy; no se pueden elegir fechas futuras. El gasto cuenta en el mes de esta fecha (disponible, reportes, alertas y simulador), no en el mes en que se registró.
 - Campo **NOTA (OPCIONAL)**.
 - Botón "Guardar gasto" con un ícono de documento.
 
-**Variante de registro manual.** Conserva la misma estructura, pero sin el banner ni la vista previa del recibo. El campo cambia a **VALOR DEL GASTO** y aparece vacío, listo para escribir.
+**Variante de registro manual.** Conserva la misma estructura, pero sin el banner ni la vista previa del recibo. El campo cambia a **VALOR DEL GASTO** y aparece vacío, listo para escribir. La fecha también está, con hoy por defecto.
+
+**Edición de un gasto.** Se abre "Editar movimiento" con el valor, la categoría, la fecha y la nota del gasto, y los botones "Guardar cambios" y "Eliminar movimiento". Cambiar la fecha pasa el gasto al mes de la nueva fecha.
+
+**Edición de un ingreso.** Al tocar un ingreso en Inicio se abre "Editar movimiento" con el formulario del ingreso (valor, descripción y fecha), sin categorías ni nota, porque el tipo no cambia al editar. Los botones "Guardar cambios" y "Eliminar movimiento" funcionan igual que en un gasto.
 
 **Acciones.**
 
 - Editar el valor.
 - Cambiar la categoría.
 - Agregar una nota.
+- Cambiar la fecha.
 - Guardar el gasto o volver a la pantalla anterior.
 
 **Decisiones de diseño.** Mostrar la imagen del recibo con el área detectada resaltada le permite al usuario verificar de dónde salió el valor y confiar en el resultado. Esa transparencia es importante: si la aplicación se equivoca y el usuario no puede ver por qué, deja de confiar en la función. El valor se muestra grande y editable porque es el dato más importante y el que con más probabilidad necesita corrección. Usar una sola pantalla para ambas variantes mantiene la consistencia y simplifica el desarrollo.
@@ -287,12 +319,72 @@ _Figura 5.10. Captura de la parte inferior del simulador._
 - **Grupos de opciones:**
   - Cuenta: datos personales y cambio de contraseña.
   - Seguridad: desbloqueo con huella, bloqueo automático y sesiones activas.
-  - Preferencias: alertas de presupuesto y categorías.
+  - Preferencias: alertas de presupuesto y categorías. En el MVP tiene el botón "Presupuestos", que abre la pantalla 13.
   - Privacidad: política de tratamiento de datos y términos.
 - **Botón "Cerrar sesión".**
 - **Enlace "Eliminar mi cuenta"** en rojo, que abre un diálogo de confirmación explicando que la acción es permanente.
 
 **Decisiones de diseño.** La eliminación de cuenta se ubica al final y en rojo para que sea fácil de encontrar cuando se busca, pero difícil de activar por error. Además de ser una buena práctica, es un requisito de las tiendas de aplicaciones.
+
+**C. Bienvenida**
+
+**Pantalla 11. Bienvenida _(por diseñar)_**
+
+**Objetivo.** Que un usuario nuevo empiece con su dinero del mes registrado y, si quiere, con presupuestos, para que el disponible y las alertas del 75% y del 100% tengan sentido desde el primer gasto.
+
+**Cuándo aparece.** Una sola vez, a un usuario sin ningún dato propio (movimientos, presupuestos ni categorías propias, aunque estén eliminados), después de la primera sincronización exitosa. Así, quien ya tiene datos en la nube y entra desde un celular nuevo no la ve, porque la sincronización ya los descargó. Si el primer inicio de sesión es sin conexión, se pospone hasta que una sincronización salga bien; si mientras tanto el usuario registra algo, ya no aparece. Con los datos de demostración (solo en desarrollo) tampoco aparece. Se abre encima de la pantalla visible y, al cerrarla, el usuario vuelve a donde estaba.
+
+**Especificación.** Dos pasos con indicador de progreso ("Paso 1 de 2"), botón Volver arriba y las acciones fijas abajo:
+
+1. **Ingresos:** título "¿Con cuánto dinero cuentas este mes?" y el texto "Registra tus ingresos para ver cuánto tienes disponible. Puedes cambiarlos después". Cada ingreso es una tarjeta con **VALOR DEL INGRESO** y **DESCRIPCIÓN**; el primero trae "Salario". El botón "Agregar otro ingreso" suma tarjetas (hasta cinco) y, desde la segunda, cada una tiene un botón para quitarla. Los ingresos se registran con la fecha de hoy. Botones "Continuar" (requiere un valor mayor que cero en cada ingreso) y "Omitir".
+2. **Presupuestos (opcional):** título "Define tus presupuestos" y el texto "Opcional. Te avisaremos al llegar al 75% y al 100% de cada uno". Una tarjeta por categoría de gasto, con su ícono y el campo del límite mensual. Botones "Guardar presupuestos" (requiere al menos un límite) y "Omitir".
+
+**Comportamiento.**
+
+- Omitir en el paso 1 pasa al paso 2; terminar u omitir el paso 2 cierra la bienvenida.
+- Volver (o el botón atrás del sistema) en el paso 2 regresa al paso 1 con lo escrito. Si se continúa otra vez, los ingresos ya guardados se actualizan y los quitados se eliminan: nunca se duplican. En el paso 1, Volver cierra la bienvenida.
+- Al cerrarla, por cualquier camino, queda marcada como completada y no vuelve a salir en este celular. La marca se guarda en la base local, así que se borra al cerrar sesión o al entrar otro usuario.
+
+**Estados.** Guardando: el botón principal muestra el indicador de progreso y los demás se deshabilitan. Error: mensaje breve en rojo; lo ya guardado no se pierde. Sin conexión: funciona igual, porque todo se guarda en el celular y se sincroniza después.
+
+**Limitación conocida.** La marca es solo del dispositivo. Un usuario que omitió la bienvenida sin registrar nada la verá de nuevo si entra desde otro celular. Se acepta en el MVP para no agregar columnas en el servidor.
+
+**Decisiones de diseño.** La bienvenida no pide nada obligatorio: cada paso se puede omitir, porque el objetivo es ayudar a empezar, no poner una barrera. Preguntar por el dinero del mes en lugar de por un "saldo" mantiene un solo concepto (ingresos), el mismo que usan el disponible y el simulador.
+
+**D. Historial y presupuestos**
+
+**Pantalla 12. Historial _(por diseñar)_**
+
+**Objetivo.** Consultar todos los movimientos, no solo los últimos, y llegar a cualquiera para editarlo o eliminarlo (RF-22).
+
+**Especificación.**
+
+- Encabezado con botón Volver y el título "Historial".
+- Selector **Todos | Gastos | Ingresos**, el mismo componente del selector Gasto | Ingreso, con la etiqueta para lectores de pantalla "Tipo de movimiento".
+- Con Todos o Gastos, chips de categoría: "Todas" (seleccionada por defecto), Mercado, Transporte, Ocio, Servicios, Restaurantes y Otros. Con Ingresos los chips se ocultan, porque un ingreso no tiene categoría que elegir.
+- Los movimientos agrupados por mes, del más reciente al más antiguo. Cada mes tiene su título ("Octubre 2026") y sus totales en una línea: "+\$4.250.000 ingresos · -\$2.375.680 gastos"; con un filtro de tipo, solo el total que aplica.
+- Cada movimiento usa la misma tarjeta de Inicio (ícono de categoría, nombre, categoría y fecha, monto con signo) y el ícono de pendiente de sincronizar cuando corresponde. Los eliminados no aparecen.
+- Al llegar al final se cargan los meses anteriores, tres a la vez, con un indicador de progreso. Así la pantalla no lee todos los movimientos de golpe.
+
+**Acciones.** Filtrar por tipo y por categoría; tocar un movimiento para abrir "Editar movimiento" (pantalla 7), donde se puede guardar o eliminar; deslizar hacia abajo para sincronizar.
+
+**Estados.** Cargando: indicador de progreso. Vacío sin filtro: "Aún no tienes movimientos" con el botón "Registrar un movimiento". Vacío con filtro: "No hay movimientos con este filtro" y la sugerencia de probar otro. Error: banner rojo "No pudimos cargar tu historial". Sin conexión: funciona igual, porque lee la base del celular.
+
+**Pantalla 13. Presupuestos _(por diseñar)_**
+
+**Objetivo.** Ver cómo va cada presupuesto del mes y crearlo, cambiarlo o quitarlo en cualquier momento, no solo en la bienvenida (RF-52).
+
+**Especificación.**
+
+- Encabezado con botón Volver, el título "Presupuestos" y el mes actual ("Octubre 2026"), y el texto "Te avisaremos al llegar al 75% y al 100% de cada uno. Cada mes empieza con los límites del mes anterior".
+- Una tarjeta por categoría de gasto (Mercado, Transporte, Ocio, Servicios, Restaurantes y Otros), con su ícono y nombre:
+  - Con presupuesto: "Gastado \$897.000 de \$1.150.000", una barra proporcional (azul bajo el 75%, amarilla desde el 75% y roja desde el 100%) y el texto "78% · Te quedan \$253.000" o "112% · Superaste el límite por \$X". El porcentaje escrito evita depender del color.
+  - Sin presupuesto: "Sin presupuesto. Toca para definirlo".
+- Al tocar una tarjeta se abre en ella el campo **LÍMITE MENSUAL DE …** (el mismo de la bienvenida) con "Guardar", "Cancelar" y, si ya existe, "Quitar presupuesto" en rojo, que pide confirmación. Solo una tarjeta se edita a la vez.
+
+**Comportamiento.** El límite debe ser un valor entero mayor que cero. Quitar un presupuesto lo elimina solo de este mes: no vuelve a aparecer en el mes aunque se abra la app de nuevo. Al empezar un mes sin presupuestos, la app copia los del último mes que tuvo (RF-53); si el usuario los había quitado todos, no copia nada.
+
+**Estados.** Cargando: indicador de progreso. Guardando: el botón muestra el indicador y los demás se deshabilitan. Error: banner rojo al cargar y mensaje breve al guardar. Éxito: "Presupuesto guardado" o "Presupuesto quitado". Sin conexión: funciona igual y se sincroniza después.
 
 ## 5.3 Estados de la interfaz
 
@@ -375,7 +467,7 @@ Se usan íconos de línea con un grosor uniforme y esquinas redondeadas, acordes
 | Tarjeta seleccionable        | Tarjeta con ícono, título, descripción e indicador tipo radio; borde azul al seleccionarse.                                        | Nuevo gasto.                                                      |
 | Chip                         | Etiqueta seleccionable con borde; al seleccionarse, fondo azul claro y borde azul.                                                 | Categorías en Confirma los datos.                                 |
 | Banner                       | Franja con ícono, título y texto, en variantes de alerta (amarillo), éxito (verde) y error (rojo).                                 | Alerta de presupuesto, recibo leído, errores de inicio de sesión. |
-| Selector de pestañas         | Dos opciones en un contenedor gris; la activa con fondo blanco.                                                                    | Inicio de sesión / Registro.                                      |
+| Selector de pestañas         | Dos opciones en un contenedor gris; la activa con fondo blanco.                                                                    | Inicio de sesión / Registro, Gasto / Ingreso.                     |
 | Barra de navegación inferior | Cuatro pestañas con ícono y etiqueta; la activa en azul.                                                                           | Inicio, Reportes, Simulador, Perfil.                              |
 
 ## 5.5 Principios de diseño móvil aplicados
@@ -442,3 +534,7 @@ Estado actual de las pantallas:
 | 8\. Reportes                                 | Boceto terminado                  |
 | 9\. Simulador de ahorro                      | Boceto terminado                  |
 | 10\. Perfil                                  | Especificada, pendiente de boceto |
+| 6\. Nuevo movimiento (variante Ingreso)      | Especificada, pendiente de boceto |
+| 11\. Bienvenida                              | Especificada, pendiente de boceto |
+| 12\. Historial                               | Especificada, pendiente de boceto |
+| 13\. Presupuestos                            | Especificada, pendiente de boceto |

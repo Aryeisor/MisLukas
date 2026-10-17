@@ -32,4 +32,19 @@ void main() {
     expect(previousMonthStart(DateTime(2026, 1, 15)), DateTime(2025, 12));
     expect(dateOnly(DateTime(2026, 9, 22, 10, 30)), DateTime(2026, 9, 22));
   });
+
+  group('MonthShiftedClock (fecha simulada en desarrollo)', () {
+    test('corre los meses conservando el día y la hora', () {
+      final shifted = MonthShiftedClock(clock, 1);
+      expect(shifted.now(), DateTime(2026, 10, 22, 18, 45));
+      expect(shifted.currentMonth(), DateTime(2026, 10));
+    });
+
+    test('recorta al último día del mes y cambia de año', () {
+      expect(shiftMonths(DateTime(2026, 1, 31), 1), DateTime(2026, 2, 28));
+      expect(shiftMonths(DateTime(2028, 1, 31), 1), DateTime(2028, 2, 29));
+      expect(shiftMonths(DateTime(2026, 12, 15), 1), DateTime(2027, 1, 15));
+      expect(shiftMonths(DateTime(2026, 9, 22), 0), DateTime(2026, 9, 22));
+    });
+  });
 }

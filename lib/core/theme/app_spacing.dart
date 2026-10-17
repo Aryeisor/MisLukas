@@ -39,6 +39,9 @@ abstract final class AppSizes {
   /// Avatar con iniciales del perfil.
   static const double avatar = 72;
 
+  /// Alto de cada casilla del código de verificación.
+  static const double codeBoxHeight = 56;
+
   // Gráficos
   /// Diámetro de la dona de Reportes.
   static const double donutSize = 120;

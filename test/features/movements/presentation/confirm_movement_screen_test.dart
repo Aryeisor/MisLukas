@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mislukas/core/database/app_database.dart';
 import 'package:mislukas/core/widgets/widgets.dart';
@@ -119,6 +120,153 @@ void main() {
     });
   });
 
+  group('Fecha del gasto (RF-19)', () {
+    const manual = CreateMovementMode(MovementEntryMethod.manual);
+
+    ProviderContainer containerOf(WidgetTester tester) =>
+        ProviderScope.containerOf(
+          tester.element(find.byType(ConfirmMovementScreen)),
+        );
+
+    Future<void> showDate(WidgetTester tester, String label) async {
+      await tester.scrollUntilVisible(
+        find.text(label),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> pickDay(
+      WidgetTester tester,
+      String current,
+      String day,
+    ) async {
+      await showDate(tester, current);
+      await tester.tap(find.text(current));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(day));
+      await tester.tap(find.text('ACEPTAR'));
+      await tester.pumpAndSettle();
+    }
+
+    /// Guarda con el ViewModel: el botón navega a Inicio, que no existe sin
+    /// el router.
+    Future<void> save(WidgetTester tester, ConfirmMovementMode mode) async {
+      final error = await pumpUntilDone(
+        tester,
+        containerOf(tester)
+            .read(confirmMovementViewModelProvider(mode).notifier)
+            .save(),
+      );
+      expect(error, isNull);
+    }
+
+    Future<MovementRow> latest(WidgetTester tester, AppDatabase db) =>
+        pumpUntilDone(
+          tester,
+          (db.select(db.movements)
+                ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
+                ..limit(1))
+              .getSingle(),
+        );
+
+    testWidgetsWithDatabase('registrar con la fecha de ayer', (
+      tester,
+      db,
+    ) async {
+      await pumpScreen(
+        tester,
+        const ConfirmMovementScreen(mode: manual),
+        database: db,
+      );
+      await tester.enterText(amountInput(), '25000');
+      await tester.pump();
+      await tester.tap(find.text('Transporte'));
+      await tester.pumpAndSettle();
+
+      await showDate(tester, 'Hoy, 22 de septiembre');
+      expect(find.text('FECHA'), findsOneWidget);
+      await pickDay(tester, 'Hoy, 22 de septiembre', '21');
+      expect(find.text('Ayer, 21 de septiembre'), findsOneWidget);
+      await save(tester, manual);
+
+      final row = await latest(tester, db);
+      expect(row.amount, 25000);
+      expect(row.date, DateTime(2026, 9, 21));
+    });
+
+    testWidgetsWithDatabase('registrar por foto con un día del mes anterior', (
+      tester,
+      db,
+    ) async {
+      const photo = CreateMovementMode(MovementEntryMethod.photo);
+      await pumpScreen(
+        tester,
+        const ConfirmMovementScreen(mode: photo),
+        database: db,
+      );
+      await showDate(tester, 'Hoy, 22 de septiembre');
+      await tester.tap(find.text('Hoy, 22 de septiembre'));
+      await tester.pumpAndSettle();
+      expect(find.text('Fecha del gasto'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.chevron_left));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('31'));
+      await tester.tap(find.text('ACEPTAR'));
+      await tester.pumpAndSettle();
+      expect(find.text('31 de agosto'), findsOneWidget);
+
+      await save(tester, photo);
+      final row = await latest(tester, db);
+      expect(row.origin, 'foto');
+      expect(row.date, DateTime(2026, 8, 31));
+    });
+
+    testWidgetsWithDatabase('el calendario va hasta hoy y no acepta mañana', (
+      tester,
+      db,
+    ) async {
+      await pumpScreen(
+        tester,
+        const ConfirmMovementScreen(mode: manual),
+        database: db,
+      );
+      await showDate(tester, 'Hoy, 22 de septiembre');
+      await tester.tap(find.text('Hoy, 22 de septiembre'));
+      await tester.pumpAndSettle();
+      final picker = tester.widget<CalendarDatePicker>(
+        find.byType(CalendarDatePicker),
+      );
+      expect(picker.lastDate, DateTime(2026, 9, 22));
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      // El ViewModel tampoco acepta una fecha futura.
+      containerOf(tester)
+          .read(confirmMovementViewModelProvider(manual).notifier)
+          .setDate(DateTime(2026, 9, 23));
+      await tester.pump();
+      expect(find.text('Hoy, 22 de septiembre'), findsOneWidget);
+    });
+
+    testWidgetsWithDatabase('editar la fecha de un gasto', (tester, db) async {
+      final id = await movementIdOf(tester, db, 'Éxito');
+      final mode = EditMovementMode(id);
+      await pumpScreen(tester, ConfirmMovementScreen(mode: mode), database: db);
+
+      await pickDay(tester, 'Hoy, 22 de septiembre', '20');
+      expect(find.text('20 de septiembre'), findsOneWidget);
+      await save(tester, mode);
+
+      final row = await pumpUntilDone(
+        tester,
+        (db.select(db.movements)..where((t) => t.id.equals(id))).getSingle(),
+      );
+      expect(row.date, DateTime(2026, 9, 20));
+    });
+  });
+
   group('Modo edición', () {
     testWidgetsWithDatabase('gasto: precarga valor, categoría y acciones', (
       tester,
@@ -148,7 +296,29 @@ void main() {
       expect(delete.destructive, isTrue);
     });
 
-    testWidgetsWithDatabase('ingreso: solo la categoría Ingreso', (
+    testWidgetsWithDatabase(
+      'ingreso: formulario de ingreso con valor, descripción y fecha',
+      (tester, db) async {
+        final id = await movementIdOf(tester, db, 'Salario');
+        await pumpScreen(
+          tester,
+          ConfirmMovementScreen(mode: EditMovementMode(id)),
+          database: db,
+        );
+
+        expect(find.text('VALOR DEL INGRESO'), findsOneWidget);
+        expect(find.text('3.800.000'), findsOneWidget);
+        expect(find.text('DESCRIPCIÓN'), findsOneWidget);
+        expect(find.widgetWithText(TextField, 'Salario'), findsOneWidget);
+        expect(find.text('FECHA'), findsOneWidget);
+        expect(find.text('1 de septiembre'), findsOneWidget);
+        // Sin categorías ni nota: el tipo no cambia al editar.
+        expect(find.byType(AppChip), findsNothing);
+        expect(find.text('NOTA (OPCIONAL)'), findsNothing);
+      },
+    );
+
+    testWidgetsWithDatabase('ingreso: el calendario no ofrece días futuros', (
       tester,
       db,
     ) async {
@@ -159,10 +329,12 @@ void main() {
         database: db,
       );
 
-      expect(find.text('VALOR DEL INGRESO'), findsOneWidget);
-      expect(find.text('3.800.000'), findsOneWidget);
-      expect(find.byType(AppChip), findsOneWidget);
-      expect(chipSelected(tester, 'Ingreso'), isTrue);
+      await tester.tap(find.text('1 de septiembre'));
+      await tester.pumpAndSettle();
+      final picker = tester.widget<CalendarDatePicker>(
+        find.byType(CalendarDatePicker),
+      );
+      expect(picker.lastDate, DateTime(2026, 9, 22));
     });
 
     testWidgetsWithDatabase('la nota se precarga', (tester, db) async {
@@ -179,6 +351,11 @@ void main() {
         database: db,
       );
 
+      await tester.scrollUntilVisible(
+        find.text('Mercado de la semana'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('Mercado de la semana'), findsOneWidget);
     });
 

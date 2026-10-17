@@ -7,6 +7,7 @@ import 'package:mislukas/core/database/seed/demo_seed.dart';
 import 'package:mislukas/core/utils/clock.dart';
 import 'package:mislukas/features/budgets/data/drift_budget_repository.dart';
 import 'package:mislukas/features/movements/data/drift_movement_repository.dart';
+import 'package:mislukas/features/onboarding/data/drift_onboarding_repository.dart';
 
 import 'domain_fixtures.dart';
 
@@ -23,6 +24,7 @@ DemoSeed testDemoSeed(AppDatabase db, {Clock? clock}) {
     db: db,
     movements: DriftMovementRepository(db),
     budgets: DriftBudgetRepository(db),
+    onboarding: DriftOnboardingRepository(db),
     clock: clock ?? testClock,
     ids: SequentialIdGenerator(),
   );

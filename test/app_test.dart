@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mislukas/core/router/app_routes.dart';
+import 'package:mislukas/core/theme/category_style.dart';
 import 'package:mislukas/core/widgets/widgets.dart';
 import 'package:mislukas/features/home/presentation/home_screen.dart';
 import 'package:mislukas/features/reports/presentation/reports_screen.dart';
@@ -51,7 +52,7 @@ void main() {
       expect(find.text('\$2.375.680'), findsOneWidget);
 
       // Nuevo gasto con registro manual.
-      await tester.tap(find.text('Nuevo gasto'));
+      await tester.tap(find.text('Nuevo movimiento'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Registro manual'));
       await tester.pumpAndSettle();
@@ -70,7 +71,11 @@ void main() {
         ),
         matching: find.byType(TextField),
       );
-      await tester.ensureVisible(noteField);
+      await tester.scrollUntilVisible(
+        noteField,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.enterText(noteField, 'Taxi');
       await tester.pump();
 
@@ -93,6 +98,58 @@ void main() {
       expect(find.text('\$2.400.680'), findsOneWidget);
       expect(find.text('\$1.849.320'), findsOneWidget);
     },
+  );
+
+  testWidgetsWithDatabase(
+    'registrar un ingreso: Nuevo movimiento → Ingreso → Inicio',
+    (tester, db) async {
+      await pumpApp(tester, database: db);
+      await loginAsDemoUser(tester);
+      expect(find.text('Aún no tienes movimientos este mes'), findsOneWidget);
+
+      await tester.tap(find.text('Registrar un movimiento'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ingreso'));
+      await tester.pumpAndSettle();
+      await tester.enterText(amountInput(), '3800000');
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(AppTextField),
+          matching: find.byType(TextField),
+        ),
+        'Salario',
+      );
+      await tester.pump();
+      await tester.tap(find.widgetWithText(AppPrimaryButton, 'Guardar ingreso'));
+      await tester.pumpAndSettle();
+
+      // Inicio: el disponible es el ingreso y la fila va en verde con "+".
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(snackbarText('Ingreso guardado'), findsOneWidget);
+      expect(find.text('\$3.800.000'), findsNWidgets(2));
+      expect(find.text('\$0'), findsOneWidget);
+      final tile = tester.widget<MovementTile>(find.byType(MovementTile));
+      expect(tile.title, 'Salario');
+      expect(tile.category, CategoryKind.ingreso);
+      expect(tile.dateLabel, 'Hoy');
+      expect(tile.isPendingSync, isTrue);
+      expect(find.text('+\$3.800.000'), findsOneWidget);
+
+      // Reportes es solo de gastos: sigue vacío.
+      await openTab(tester, 'Reportes');
+      expect(find.text('Aún no tienes gastos este mes'), findsOneWidget);
+      expect(find.byType(AppDonutChart), findsNothing);
+
+      // El simulador usa meses completos: este mes aún no cuenta.
+      await openTab(tester, 'Simular');
+      expect(
+        find.text(
+          'Necesitamos al menos un mes de datos para calcular tu ahorro',
+        ),
+        findsOneWidget,
+      );
+    },
+    seed: false,
   );
 
   testWidgetsWithDatabase('editar un movimiento actualiza Inicio y Reportes', (
@@ -211,6 +268,77 @@ void main() {
     expect(find.text('\$4.450.000'), findsOneWidget);
   });
 
+  testWidgetsWithDatabase(
+    'editar un ingreso cambia valor, descripción y fecha',
+    (tester, db) async {
+      await pumpApp(tester, database: db);
+      await loginAsDemoUser(tester);
+
+      final id = await movementIdOf(tester, db, 'Salario');
+      GoRouter.of(
+        tester.element(find.byType(HomeScreen)),
+      ).push(AppRoutes.editMovementWith(id));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(amountInput(), '4000000');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Salario'),
+        'Salario y prima',
+      );
+      await tester.pump();
+
+      // Calendario del sistema en español, hasta hoy (22 de septiembre).
+      await tester.tap(find.text('1 de septiembre'));
+      await tester.pumpAndSettle();
+      expect(find.text('Fecha del ingreso'), findsOneWidget);
+      await tester.tap(find.text('15'));
+      await tester.tap(find.text('ACEPTAR'));
+      await tester.pumpAndSettle();
+      expect(find.text('15 de septiembre'), findsOneWidget);
+
+      await tester.tap(
+        find.widgetWithText(AppPrimaryButton, 'Guardar cambios'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeScreen), findsOneWidget);
+
+      final row = await pumpUntilDone(
+        tester,
+        (db.select(db.movements)..where((t) => t.id.equals(id))).getSingle(),
+      );
+      expect(row.amount, 4000000);
+      expect(row.description, 'Salario y prima');
+      expect(row.date, DateTime(2026, 9, 15));
+      expect(row.type, 'ingreso');
+      expect(row.syncStatus, 'pendiente');
+    },
+  );
+
+  testWidgetsWithDatabase('eliminar un ingreso baja el disponible', (
+    tester,
+    db,
+  ) async {
+    await pumpApp(tester, database: db);
+    await loginAsDemoUser(tester);
+
+    final id = await movementIdOf(tester, db, 'Freelance');
+    GoRouter.of(
+      tester.element(find.byType(HomeScreen)),
+    ).push(AppRoutes.editMovementWith(id));
+    await tester.pumpAndSettle();
+
+    final delete = find.text('Eliminar movimiento');
+    await tester.ensureVisible(delete);
+    await tester.tap(delete);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Eliminar'));
+    await tester.pumpAndSettle();
+
+    // Ingresos 4.250.000 − 450.000; gastos 2.375.680.
+    expect(find.text('\$3.800.000'), findsOneWidget);
+    expect(find.text('\$1.424.320'), findsOneWidget);
+  });
+
   testWidgetsWithDatabase('Borrar todos los datos deja la app vacía', (
     tester,
     db,
@@ -220,7 +348,12 @@ void main() {
     await openTab(tester, 'Perfil');
 
     final clear = find.text('Borrar todos los datos');
-    await tester.ensureVisible(clear);
+    await tester.scrollUntilVisible(
+      clear,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(clear);
     await tester.pumpAndSettle();
     expect(find.text('¿Borrar todos los datos?'), findsOneWidget);
@@ -250,6 +383,7 @@ void main() {
     await openTab(tester, 'Perfil');
     final load = find.text('Cargar datos de demostración');
     await tester.ensureVisible(load);
+    await tester.pumpAndSettle();
     await tester.tap(load);
     await tester.pumpAndSettle();
     await openTab(tester, 'Inicio');

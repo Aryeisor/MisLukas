@@ -1,4 +1,6 @@
+import '../entities/month_summary.dart';
 import '../entities/movement.dart';
+import '../entities/movement_filter.dart';
 import '../entities/receipt.dart';
 
 /// Acceso a los movimientos. Las consultas excluyen los eliminados.
@@ -20,8 +22,20 @@ abstract interface class MovementRepository {
   /// Los [limit] movimientos más recientes, del más nuevo al más antiguo.
   Stream<List<Movement>> watchRecent({required int limit});
 
-  /// Movimientos con fecha en [from, to), del más reciente al más antiguo.
-  Stream<List<Movement>> watchBetween(DateTime from, DateTime to);
+  /// Movimientos con fecha en [from, to) que cumplen [filter], del más
+  /// reciente al más antiguo.
+  Stream<List<Movement>> watchBetween(
+    DateTime from,
+    DateTime to, {
+    MovementFilter filter = MovementFilter.all,
+  });
+
+  /// Totales de cada mes con movimientos que cumplen [filter], del mes más
+  /// reciente al más antiguo. Se calculan en la base: no carga los
+  /// movimientos.
+  Stream<List<MonthSummary>> watchMonthSummaries({
+    MovementFilter filter = MovementFilter.all,
+  });
 
   /// Igual que [watchBetween], una sola vez.
   Future<List<Movement>> getBetween(DateTime from, DateTime to);

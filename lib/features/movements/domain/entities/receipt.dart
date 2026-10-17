@@ -4,7 +4,7 @@ class Receipt {
   const Receipt({
     required this.id,
     required this.movementId,
-    required this.localPath,
+    this.localPath,
     this.detectedTotal,
     this.detectedMerchant,
   });
@@ -12,8 +12,9 @@ class Receipt {
   final String id;
   final String movementId;
 
-  /// Ubicación de la imagen en el almacenamiento interno de la app.
-  final String localPath;
+  /// Ubicación de la imagen en el almacenamiento interno de la app; null si
+  /// el recibo llegó del servidor y la imagen no está en este dispositivo.
+  final String? localPath;
 
   /// Total leído por el OCR, en pesos; null si no se detectó.
   final int? detectedTotal;

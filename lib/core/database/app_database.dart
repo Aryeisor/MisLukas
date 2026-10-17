@@ -16,19 +16,62 @@ final DateTime defaultCategoriesCreatedAt = DateTime.utc(2026, 1, 1);
 /// Base local de MisLukas (docs/06 §6.4.3). La apertura cifrada está en
 /// `database_connection.dart`; las pruebas usan una base en memoria.
 @DriftDatabase(
-  tables: [Categories, Movements, Budgets, Receipts, SyncQueue, SyncMetadata],
+  tables: [
+    Categories,
+    Movements,
+    Budgets,
+    Receipts,
+    SyncQueue,
+    SyncMetadata,
+    LocalSettings,
+  ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
+  /// v2 (Fase 5B): recibos.ruta_local admite null, y la unicidad de
+  /// presupuestos (categoría y mes) y recibos (movimiento) solo aplica a los
+  /// registros no eliminados.
+  /// v3 (Fase 5C): la cola guarda cuándo reintentar un registro rechazado y el
+  /// código del rechazo.
+  /// v4 (Fase 5D): ajustes del dispositivo (ajustes_locales), por ahora solo
+  /// la marca de la bienvenida.
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 4;
+
+  bool _closed = false;
+
+  /// Cerrar dos veces no hace nada: la base se cierra al borrar los datos
+  /// locales y otra vez cuando el provider se desecha.
+  @override
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    await super.close();
+  }
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
       await _insertDefaultCategories();
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        // Recrea las tablas con el esquema actual conservando sus filas: así se
+        // quitan las restricciones UNIQUE totales y el NOT NULL de ruta_local.
+        await m.alterTable(TableMigration(budgets));
+        await m.alterTable(TableMigration(receipts));
+        await m.createIndex(idxPresupuestosCategoriaMesActivo);
+        await m.createIndex(idxRecibosMovimientoActivo);
+      }
+      if (from < 3) {
+        await m.addColumn(syncQueue, syncQueue.nextAttemptAt);
+        await m.addColumn(syncQueue, syncQueue.lastError);
+      }
+      if (from < 4) {
+        await m.createTable(localSettings);
+      }
     },
     beforeOpen: (details) async {
       // SQLite trae las llaves foráneas desactivadas por defecto.
