@@ -1,5 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+    <!-- Supabase: autenticación y sincronización. Solo estaba en los
+         manifiestos de debug y profile (docs/07 §7.9.2). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Detectar cambios de red para sincronizar (connectivity_plus). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Alertas de presupuesto en Android 13 o superior. Se pide al guardar
+         un presupuesto, nunca al abrir la app (docs/07 §7.9). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Foto del recibo (docs/07 §7.9). El permiso se pide al usarla. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- La app funciona sin cámara (galería o registro manual): no se exige

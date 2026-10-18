@@ -96,16 +96,70 @@ Las alertas de presupuesto son más útiles si llegan en el momento preciso, aun
 
 **Por qué locales y no push.** Las notificaciones push se envían desde un servidor, lo que requeriría que el servidor calcule los presupuestos de cada usuario y que el dispositivo tenga conexión para recibirlas. En MisLukas, el cálculo del presupuesto ya ocurre en el dispositivo cada vez que se guarda un movimiento. Por eso la notificación se genera ahí mismo: funciona sin conexión, llega de inmediato y no requiere infraestructura adicional en el servidor.
 
-**Cuando se generan.** Después de guardar un gasto, el caso de uso EvaluarAlertasDePresupuesto calcula el porcentaje usado del presupuesto de esa categoría. Si el gasto cruza un umbral, se genera la alerta:
+**Cuándo se generan.** Cada vez que cambian los gastos o los presupuestos del mes actual, el caso de uso NotificarAlertasDePresupuesto (`NotifyBudgetAlerts`) calcula el porcentaje usado de cada presupuesto. Así se cubren todos los casos:
 
-| Umbral               | Mensaje de ejemplo                                                                 |
-| -------------------- | ---------------------------------------------------------------------------------- |
-| 75% del presupuesto  | "Llevas el 78% de tu presupuesto de mercado. Te quedan \$253.000 para fin de mes." |
-| 100% del presupuesto | "Superaste tu presupuesto de ocio de septiembre."                                  |
+- registrar, editar o eliminar un gasto;
+- crear, cambiar o quitar un presupuesto;
+- los gastos que llegan por sincronización desde otro celular.
 
-**Evitar el exceso de notificaciones.** Una aplicación que notifica demasiado termina silenciada o desinstalada. Por eso cada alerta se envía **una sola vez por categoría, por umbral y por mes**. Si Camila ya recibió la alerta del 75% en mercado, no la volverá a recibir con cada compra; la siguiente será la del 100%, si llega a ocurrir. Además, las alertas pueden desactivarse desde el perfil, y el texto de la notificación está pensado para ser útil incluso si el usuario no abre la aplicación.
+También se evalúa después de cada sincronización. Los ingresos no cuentan. Si un gasto cruza un umbral, se genera la alerta:
 
-**Privacidad en la pantalla de bloqueo.** Las notificaciones pueden aparecer con el celular bloqueado y a la vista de otras personas. Por eso se configuran como contenido privado: la vista en la pantalla de bloqueo muestra un texto general ("Tienes una alerta de presupuesto") y el detalle con los montos solo se ve al desbloquear el dispositivo.
+| Umbral              | Mensaje                                                     |
+| ------------------- | ----------------------------------------------------------- |
+| 75% del presupuesto | "Llevas el 78% de tu presupuesto de Mercado."               |
+| Exactamente 100%    | "Llegaste al 100% de tu presupuesto de Mercado de octubre." |
+| Más de 100%         | "Superaste tu presupuesto de Mercado de octubre."           |
+
+El título es "Alerta de presupuesto". El porcentaje es el real (división entera: 74,9% no alerta). El monto restante solo se ve dentro de la app, en el banner de Inicio.
+
+**Evitar el exceso de notificaciones.** Una aplicación que notifica demasiado termina silenciada o desinstalada. Por eso cada alerta se envía **una sola vez por categoría, por umbral y por mes**. Si Camila ya recibió la alerta del 75% en mercado, no la volverá a recibir con cada compra; la siguiente será la del 100%, si llega a ocurrir.
+
+- **Un gasto que cruza los dos umbrales a la vez** muestra solo la del 100%, pero los dos quedan registrados.
+- **Si el gasto baja después de alertar** (se elimina un movimiento) **o el límite sube**, el umbral no se vuelve a alertar ese mes.
+- **El mes siguiente** se alerta de nuevo, porque las alertas se evalúan con los presupuestos y gastos de cada mes.
+- **La notificación del 100% reemplaza a la del 75%** de la misma categoría y mes: el id de la notificación es fijo para cada categoría y mes.
+
+**Registro de alertas enviadas (Fase 6B).** Lo enviado se guarda en la tabla local `alertas_enviadas` (categoría, mes, umbral, fecha), en la base cifrada, sin sincronizar (docs/06 §6.4.3).
+
+- **Línea base.** La primera vez que se evalúa en una base (celular nuevo, otro usuario o la actualización a la 6B) se registra todo lo ya cruzado sin notificar. Así lo que llega del servidor en el primer pull no produce una ráfaga de avisos. Para que la línea base incluya los datos del servidor, no se evalúa nada hasta la primera sincronización exitosa de la sesión.
+- **Registrar antes de notificar.** Una alerta se muestra como mucho una vez, aunque la notificación falle.
+- Se borra con la base al cerrar sesión o al entrar otro usuario.
+
+**Interruptor en el Perfil.** Perfil › Preferencias › "Notificaciones de presupuesto" las activa o desactiva (ajuste local `notificaciones_presupuesto`). Su descripción indica el estado:
+
+| Estado                     | Descripción                                                                  |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| Activadas, con permiso     | "Te avisamos al 75% y al 100%"                                               |
+| Sin permiso                | "Permite las notificaciones del celular" (al activarlas se pide el permiso) |
+| Negado de forma permanente | "Desactivadas en los ajustes del celular" (ofrece "Abrir Ajustes")          |
+| Desactivadas               | "Desactivadas. Las alertas se ven en Inicio"                                 |
+
+Sin el interruptor o sin permiso, las alertas se siguen registrando: al activarlas no llegan avisos viejos. Dentro de la app, las alertas se ven siempre en Inicio.
+
+**Privacidad en la pantalla de bloqueo.** Las notificaciones pueden aparecer con el celular bloqueado y a la vista de otras personas.
+
+- **Ningún texto lleva montos**, ni siquiera con el celular desbloqueado: solo el porcentaje, la categoría y el mes.
+- **Visibilidad privada.** Se configuran con `NotificationVisibility.private`: en una pantalla de bloqueo segura, Android oculta el texto.
+- **Payload sin datos.** Es solo la ruta de Presupuestos (docs/08 §8.8.3.1).
+
+**Al tocar la notificación** se abre Presupuestos (`/profile/budgets`) encima de donde estaba el usuario, con la app abierta o cerrada, una vez que la sesión está lista (`NotificationTapLauncher`). **En la Fase 6C, este camino deberá pasar primero por el desbloqueo con PIN o biometría.**
+
+**Implementación.**
+
+- **Paquete.** flutter_local_notifications 22.3.2 (compileSdk 36, minSdk 24), con un canal "Alertas de presupuesto" de importancia normal. La 23 exige compileSdk 37.
+- **Desugaring.** El plugin exige core library desugaring (`desugar_jdk_libs` 2.1.4 en `android/app/build.gradle.kts`).
+- **Ícono.** `res/drawable/ic_stat_alerta.xml` es un ícono monocromo para la barra de estado. `res/raw/keep.xml` evita que la reducción de recursos del build release lo quite.
+- **Sin programación.** Las notificaciones no se programan: el manifiesto combinado no tiene alarmas exactas, arranque del sistema, pantalla completa ni servicios en primer plano.
+
+**Limitaciones conocidas.**
+
+- **Sin segundo plano.** No hay trabajo en segundo plano: las alertas se evalúan solo con la app abierta. Un gasto registrado en otro celular se notifica cuando esta app se abre y sincroniza.
+- **Otro celular puede repetir una alerta.** El registro es local, así que en otro celular una alerta puede repetirse una vez. Si se guardara en Supabase, igual se repetiría cuando los dos celulares alertan sin conexión, y costaría otra tabla en la sincronización.
+- **Sin notificaciones antes de la primera sincronización.** Un usuario que nunca ha sincronizado (sin conexión desde el primer uso) no recibe notificaciones hasta su primera sincronización exitosa. Dentro de la app sí ve las alertas.
+- **Solo el mes actual.** Cambiar un gasto de un mes pasado no notifica.
+- **Cambio de mes con la app abierta.** Se detecta en la siguiente sincronización, cada 5 minutos como máximo.
+
+**Prueba del cambio de mes.** En modo desarrollo, "Adelantar un mes" (Perfil) cambia el reloj: la evaluación pasa al mes nuevo, que empieza sin alertas.
 
 ## 7.5 Almacenamiento interno: base cifrada e imágenes
 
@@ -191,6 +245,19 @@ Para que la sincronización sea automática, la aplicación necesita saber cuán
 
 Además del cambio de red, la sincronización también se intenta al abrir la aplicación y periódicamente mientras está en uso, para cubrir los casos en que la conexión mejora sin que cambie el tipo de red.
 
+**Implementación (Fase 6B).**
+
+- **Paquete y monitor.** connectivity_plus 7.3.2, detrás de `NetworkMonitor` (`core/sync/network_monitor.dart`). Hay red si algún resultado no es `none`. ACCESS_NETWORK_STATE es un permiso normal, sin diálogo.
+- **Aviso combinado.** El aviso "Sin conexión" (`AppOfflineIndicator` y el banner del Perfil) se muestra si no hay red **o** si el último intento falló por la red: `isOffline = !hasNetwork || lastAttemptOffline`.
+  - Al perder la red, el aviso aparece de inmediato.
+  - Al recuperarla, el aviso no se quita: solo lo quita una sincronización exitosa, porque tener Wi-Fi no garantiza internet.
+- **Sin red no se reintenta.** Se cancela el reintento con esperas crecientes (5, 10, 20, 40 y 60 s) y queda solo el intervalo de 5 minutos.
+- **Al recuperar la red**, se sincroniza 2 s después del último cambio (`reconnectDebounce`):
+  - No se espera el backoff ni el intervalo.
+  - Si la red parpadea, cada cambio reinicia la espera y se sincroniza una sola vez.
+  - Si ya hay una sincronización en curso, se repite al terminar.
+  - El contador del backoff vuelve a cero.
+
 ## 7.9 Permisos
 
 Los sistemas operativos móviles protegen las capacidades sensibles del dispositivo mediante permisos que el usuario debe conceder. La forma en que una aplicación pide estos permisos influye directamente en la confianza del usuario: una aplicación de finanzas que pide acceso a todo apenas se abre genera desconfianza, y con razón.
@@ -230,6 +297,27 @@ El permiso se maneja con permission_handler (versión 12.0.3, la última que com
 En Android se quitan del manifiesto `RECORD_AUDIO` y `WRITE_EXTERNAL_STORAGE`, que agrega el plugin de CameraX, y `READ_EXTERNAL_STORAGE`, que el combinador de manifiestos agrega como implícito: MisLukas no graba audio ni guarda fotos fuera de su almacenamiento privado. La cámara se declara como no obligatoria (`android:required="false"`), porque sin ella la app sigue funcionando con la galería o el registro manual.
 
 **Pendiente para iOS (al compilar en macOS).** Los textos `NSCameraUsageDescription` y `NSPhotoLibraryUsageDescription` ya están en `Info.plist`. Falta lo que solo se puede hacer en el Mac: activar la macro `PERMISSION_CAMERA=1` de permission_handler en el `Podfile` y fijar el mínimo de iOS que pide ML Kit (15.5).
+
+7.9.2.2 Implementación del permiso de notificaciones (Fase 6B)
+
+POST_NOTIFICATIONS (Android 13 o superior) se maneja con permission_handler 12.0.3 (`Permission.notification`). En Android 12 o inferior el permiso viene concedido.
+
+**Cuándo se pide.** Nunca al abrir la app. Al guardar un presupuesto, en Presupuestos o en el paso 2 de la bienvenida, se muestra una vez la explicación previa:
+
+- Título "Te avisamos de tus presupuestos".
+- Texto "Te enviaremos una notificación al llegar al 75% y al 100% de un presupuesto. No mostramos montos."
+- Botones "Permitir" / "Ahora no".
+
+| Estado del permiso | Qué ve el usuario |
+| --- | --- |
+| Concedido | Nada: las alertas llegan como notificación. |
+| Sin pedir todavía | La explicación previa, una sola vez. "Permitir" muestra el diálogo del sistema; "Ahora no" no lo muestra. |
+| Negado (después de "Permitir" o de "Ahora no") | No se vuelve a preguntar. Las alertas se ven en el banner de Inicio. Se pueden activar desde el Perfil, que pide el permiso otra vez. |
+| Negado de forma permanente o bloqueado | No se muestra la explicación. En el Perfil, "Desactivadas en los ajustes del celular" con "Abrir Ajustes"; al volver a la app se revisa otra vez. |
+
+La marca de que la explicación ya se mostró (`permiso_notificaciones_explicado`) vive en `ajustes_locales` y se borra con la base: con otro usuario se explica de nuevo.
+
+**Pendiente para iOS (al compilar en macOS).** La macro `PERMISSION_NOTIFICATIONS=1` de permission_handler en el `Podfile`. La inicialización de flutter_local_notifications ya tiene en `false` las solicitudes de permiso de iOS, porque el permiso lo pide permission_handler.
 
 7.9.3 Funcionalidades que no requieren permisos
 

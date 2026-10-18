@@ -98,7 +98,50 @@ Fecha de las pruebas y observaciones: por completar.
 
 El recibo de CENS se leía bien solo, pero no encima de otra factura con texto a los lados: las palabras CUOTA y SALDO de la factura de fondo, a la misma altura, descartaban la fila. Desde ese ajuste, las exclusiones se evalúan solo sobre la línea que contiene la palabra clave (docs/07 §7.3), y la indicación del visor pide el recibo solo. Resultado con el recibo encima de otro papel después del ajuste: por completar.
 
-## 9.5 Capturas pendientes
+## 9.5 Fase 6B: alertas de presupuesto y señal de conexión
+
+Pruebas en celulares reales con `flutter run --dart-define-from-file=env/dev.json` y una cuenta de prueba. Para el cambio de mes se usa "Adelantar un mes" (solo en modo desarrollo). En Android 13 o superior, el permiso de notificaciones empieza sin pedir; para repetir los casos se borran los datos de la app o se quita el permiso en Ajustes. El Galaxy J4 (Android 10) no pide el permiso: viene concedido.
+
+**Permiso de notificaciones.**
+
+| Caso | Qué se verifica | moto g72 | Galaxy J4 |
+| --- | --- | --- | --- |
+| Abrir la app | No se pide ningún permiso al abrir. | por completar | por completar |
+| Primer presupuesto | Al guardarlo aparece "Te avisamos de tus presupuestos" con "Permitir" / "Ahora no". | por completar | no aplica |
+| "Ahora no" | No aparece el diálogo del sistema; al guardar otro presupuesto no se vuelve a preguntar. | por completar | no aplica |
+| "Permitir" › Permitir | Diálogo del sistema; el Perfil dice "Te avisamos al 75% y al 100%". | por completar | no aplica |
+| "Permitir" › No permitir | No se vuelve a preguntar; las alertas se ven en el banner de Inicio; el Perfil dice "Permite las notificaciones del celular". | por completar | no aplica |
+| Negado permanente | El Perfil dice "Desactivadas en los ajustes del celular"; "Abrir Ajustes" abre los ajustes de MisLukas y, al volver con el permiso dado, el estado se actualiza. | por completar | no aplica |
+| Interruptor del Perfil | Apagado, un gasto que cruza el 75% no notifica pero se ve en Inicio; al encenderlo no llega la alerta vieja. | por completar | por completar |
+
+**Alertas.**
+
+| Caso | Qué se verifica | moto g72 | Galaxy J4 |
+| --- | --- | --- | --- |
+| 75% | Un gasto que lleva Mercado al 75% muestra "Llevas el 75% de tu presupuesto de Mercado.", sin montos. | por completar | por completar |
+| Sin repetir | Otro gasto de Mercado en el mismo mes (sin llegar al 100%) no notifica. | por completar | por completar |
+| 100% exacto | "Llegaste al 100% de tu presupuesto de Mercado de \<mes\>."; reemplaza a la del 75%. | por completar | por completar |
+| Más de 100% de una vez | Un gasto que pasa del 74% a más del 100% notifica solo "Superaste tu presupuesto de … de \<mes\>.". | por completar | por completar |
+| Baja y vuelve a subir | Eliminar el gasto y registrarlo de nuevo no repite la alerta. | por completar | por completar |
+| Pantalla bloqueada | Con bloqueo seguro, la notificación no muestra el texto (visibilidad privada). | por completar | por completar |
+| Tocar la notificación | Con la app abierta y con la app cerrada, abre Presupuestos; Volver regresa a donde estaba. | por completar | por completar |
+| Otro celular | Un gasto registrado en el otro celular notifica en este al abrir la app y sincronizar. | por completar | por completar |
+| Celular nuevo | Al iniciar sesión con datos que ya superan el 75%, no llega ninguna notificación (línea base). | por completar | por completar |
+| Mes adelantado | "Adelantar un mes": el mes nuevo empieza sin alertas y vuelve a alertar al 75%. | por completar | por completar |
+| Cerrar sesión | Las notificaciones de alertas que estaban a la vista desaparecen. | por completar | por completar |
+
+**Señal de conexión.**
+
+| Caso | Qué se verifica | moto g72 | Galaxy J4 |
+| --- | --- | --- | --- |
+| Modo avión | El aviso "Sin conexión" aparece de inmediato. | por completar | por completar |
+| Volver la conexión | Un gasto registrado en modo avión se envía unos 2 s después de quitar el modo avión, sin esperar el reintento. | por completar | por completar |
+| Red que parpadea | Activar y desactivar el Wi-Fi varias veces seguidas sincroniza una sola vez al estabilizarse. | por completar | por completar |
+| Wi-Fi sin internet | Conectado a un Wi-Fi sin salida a internet (por ejemplo, el hotspot de otro celular sin datos), el aviso se mantiene. | por completar | por completar |
+
+Fecha de las pruebas y observaciones: por completar.
+
+## 9.6 Capturas pendientes
 
 Pantallas que hay que fotografiar en un celular real para el informe. Conviene usar una cuenta de prueba con datos de demostración y ninguna información personal.
 
@@ -137,6 +180,14 @@ Pantallas que hay que fotografiar en un celular real para el informe. Conviene u
 - Confirma los datos con el banner verde, el amarillo y el rojo.
 - Recibo sin foto en este celular ("La foto solo está en el celular donde se tomó").
 - Resultado de "Medir cifrado de recibos" en el Galaxy J4.
+
+### Alertas y conexión (Fase 6B)
+
+- Explicación previa del permiso de notificaciones.
+- Notificación del 75% y del 100% en la barra de notificaciones.
+- Notificación en la pantalla de bloqueo (sin el texto).
+- Perfil › Preferencias con el interruptor "Notificaciones de presupuesto" en sus estados.
+- Inicio con el aviso "Sin conexión" en modo avión.
 
 ### Supabase
 

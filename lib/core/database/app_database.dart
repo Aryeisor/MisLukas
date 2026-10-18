@@ -24,6 +24,7 @@ final DateTime defaultCategoriesCreatedAt = DateTime.utc(2026, 1, 1);
     SyncQueue,
     SyncMetadata,
     LocalSettings,
+    SentBudgetAlerts,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -36,8 +37,9 @@ class AppDatabase extends _$AppDatabase {
   /// código del rechazo.
   /// v4 (Fase 5D): ajustes del dispositivo (ajustes_locales), por ahora solo
   /// la marca de la bienvenida.
+  /// v5 (Fase 6B): alertas de presupuesto ya registradas (alertas_enviadas).
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   bool _closed = false;
 
@@ -71,6 +73,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 4) {
         await m.createTable(localSettings);
+      }
+      if (from < 5) {
+        await m.createTable(sentBudgetAlerts);
       }
     },
     beforeOpen: (details) async {

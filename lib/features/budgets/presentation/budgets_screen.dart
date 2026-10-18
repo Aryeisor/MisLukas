@@ -15,6 +15,7 @@ import '../../../core/widgets/widgets.dart';
 import '../domain/entities/budget_alert.dart';
 import '../domain/usecases/watch_budget_overview.dart';
 import 'budgets_view_model.dart';
+import 'notification_permission_flow.dart';
 import 'widgets/budget_limit_field.dart';
 
 /// Presupuestos del mes (RF-52, pantalla 13): gastado, límite y porcentaje de
@@ -119,6 +120,7 @@ class _BudgetCard extends ConsumerWidget {
       AppSnackbar.error(context, error);
     } else {
       AppSnackbar.success(context, 'Presupuesto guardado');
+      await maybeAskNotificationPermission(context, ref);
     }
   }
 

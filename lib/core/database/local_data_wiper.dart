@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../notifications/local_notifications.dart';
 import '../security/database_key_store.dart';
 import '../security/device_session_store.dart';
 import '../security/receipt_key_store.dart';
@@ -26,6 +27,10 @@ abstract interface class LocalDataWiper {
 /// base nueva, [deleteStaleDatabase]) y, sin dueño, la próxima cuenta entra sin
 /// aviso. Solo falla si no se pueden borrar esos dos. Cerrar la base y borrar
 /// archivos no bloquea: tienen tiempo máximo y sus errores se ignoran.
+///
+/// También quita las notificaciones de alertas mostradas. El registro de
+/// alertas enviadas y los ajustes del dispositivo viven en la base y se van
+/// con ella.
 class FileLocalDataWiper implements LocalDataWiper {
   FileLocalDataWiper({
     required this._closeDatabase,
@@ -34,6 +39,7 @@ class FileLocalDataWiper implements LocalDataWiper {
     required this._receiptKeyStore,
     required this._sessionStore,
     required this._onWiped,
+    this._cancelNotifications,
   });
 
   final Future<void> Function() _closeDatabase;
@@ -44,6 +50,9 @@ class FileLocalDataWiper implements LocalDataWiper {
 
   /// Libera la base cerrada para que el próximo uso abra una nueva.
   final void Function() _onWiped;
+
+  /// Quita las notificaciones mostradas; null si no hay (pruebas).
+  final Future<void> Function()? _cancelNotifications;
 
   /// Tiempo máximo para cerrar la base.
   static const Duration closeTimeout = Duration(seconds: 5);
@@ -57,6 +66,11 @@ class FileLocalDataWiper implements LocalDataWiper {
     await _receiptKeyStore.deleteKey();
     await _sessionStore.clearOwner();
 
+    try {
+      await _cancelNotifications?.call().timeout(closeTimeout);
+    } catch (_) {
+      // Las notificaciones no tienen montos: se sigue con el borrado.
+    }
     try {
       await _closeDatabase().timeout(closeTimeout);
     } catch (_) {
@@ -87,5 +101,6 @@ final localDataWiperProvider = Provider<LocalDataWiper>(
     receiptKeyStore: ref.read(receiptKeyStoreProvider),
     sessionStore: ref.read(deviceSessionStoreProvider),
     onWiped: () => ref.invalidate(appDatabaseProvider),
+    cancelNotifications: ref.read(localNotificationsProvider).cancelAll,
   ),
 );

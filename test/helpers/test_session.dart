@@ -4,9 +4,12 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:mislukas/core/database/app_database.dart';
 import 'package:mislukas/core/database/local_data_wiper.dart';
 import 'package:mislukas/core/security/device_session_store.dart';
+import 'package:mislukas/core/sync/network_monitor.dart';
 import 'package:mislukas/core/sync/sync_providers.dart';
+import 'package:mislukas/features/budgets/data/budgets_providers.dart';
 
 import 'fake_auth_repository.dart';
+import 'fake_device_signals.dart';
 import 'fake_sync_server.dart';
 
 /// [DeviceSessionStore] en memoria.
@@ -69,6 +72,7 @@ class FakeLocalDataWiper implements LocalDataWiper {
         await db.delete(db.budgets).go();
         await db.delete(db.syncQueue).go();
         await db.delete(db.syncMetadata).go();
+        await db.delete(db.sentBudgetAlerts).go();
         // La marca de la bienvenida vive en la base: se va con el archivo.
         await db.delete(db.localSettings).go();
       });
@@ -78,8 +82,9 @@ class FakeLocalDataWiper implements LocalDataWiper {
 }
 
 /// Lo que rodea la sesión en las pruebas de la app: almacenamiento seguro en
-/// memoria, servidor de Supabase falso, borrado de datos falso y sin
-/// sincronización automática (se sincroniza a mano).
+/// memoria, servidor de Supabase falso, borrado de datos falso, red,
+/// notificaciones y su permiso falsos, y sin sincronización automática (se
+/// sincroniza a mano).
 class TestSession {
   TestSession({
     MemoryDeviceSessionStore? store,
@@ -87,11 +92,21 @@ class TestSession {
     this.initialOwner,
     this.userId,
     this.autoSync = false,
+    FakeNetworkMonitor? network,
+    FakeBudgetAlertNotifier? notifier,
+    FakeNotificationPermission? notificationPermission,
   }) : store = store ?? MemoryDeviceSessionStore(owner: initialOwner),
-       server = server ?? FakeSyncServer();
+       server = server ?? FakeSyncServer(),
+       network = network ?? FakeNetworkMonitor(),
+       notifier = notifier ?? FakeBudgetAlertNotifier(),
+       notificationPermission =
+           notificationPermission ?? FakeNotificationPermission();
 
   final MemoryDeviceSessionStore store;
   final FakeSyncServer server;
+  final FakeNetworkMonitor network;
+  final FakeBudgetAlertNotifier notifier;
+  final FakeNotificationPermission notificationPermission;
 
   /// Dueño de la base al abrir la app (lo que main() lee del almacenamiento).
   final String? initialOwner;
@@ -115,6 +130,9 @@ class TestSession {
       ),
       syncAutoTriggersProvider.overrideWithValue(autoSync),
       localDataWiperProvider.overrideWithValue(wiper),
+      networkMonitorProvider.overrideWithValue(network),
+      budgetAlertNotifierProvider.overrideWithValue(notifier),
+      notificationPermissionProvider.overrideWithValue(notificationPermission),
     ];
   }
 }

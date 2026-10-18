@@ -14,6 +14,7 @@ import '../../../core/widgets/dev/receipt_cipher_benchmark_action.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../auth/presentation/auth_messages.dart';
 import 'profile_view_model.dart';
+import 'widgets/notification_settings_tile.dart';
 
 /// Perfil provisional (pantalla 10). El perfil completo de docs/05 §5.2 llega
 /// en una próxima versión; por ahora tiene el estado de sincronización, el
@@ -134,6 +135,8 @@ class ProfileScreen extends ConsumerWidget {
               icon: Icons.account_balance_wallet_outlined,
               onPressed: () => context.push(AppRoutes.budgets),
             ),
+            const SizedBox(height: AppSpacing.sm),
+            const NotificationSettingsTile(),
             const SizedBox(height: AppSpacing.xl),
             AppSecondaryButton(
               label: state.isSigningOut ? 'Cerrando sesión…' : 'Cerrar sesión',

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -71,17 +73,18 @@ AppDatabase openV1Database() {
   );
 }
 
-/// Definición SQL de las tablas e índices afectados por la v2, la v3 y la v4.
+/// Definición SQL de las tablas e índices afectados por la v2 a la v5.
 Future<Map<String, String>> schemaOf(AppDatabase db) async {
   final rows = await db
       .customSelect(
         'SELECT name, sql FROM sqlite_master '
-        'WHERE tbl_name IN (?, ?, ?, ?) AND sql IS NOT NULL',
+        'WHERE tbl_name IN (?, ?, ?, ?, ?) AND sql IS NOT NULL',
         variables: [
           Variable.withString('presupuestos'),
           Variable.withString('recibos'),
           Variable.withString('cola_sincronizacion'),
           Variable.withString('ajustes_locales'),
+          Variable.withString('alertas_enviadas'),
         ],
       )
       .get();
@@ -89,12 +92,12 @@ Future<Map<String, String>> schemaOf(AppDatabase db) async {
 }
 
 void main() {
-  test('v1 → v4 conserva los datos', () async {
+  test('v1 → v5 conserva los datos', () async {
     final db = openV1Database();
     addTearDown(db.close);
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.read<int>('user_version'), 4);
+    expect(version.read<int>('user_version'), 5);
 
     final budget = await db.select(db.budgets).getSingle();
     expect(budget.limitAmount, 800000);
@@ -113,6 +116,44 @@ void main() {
 
     // v4: ajustes del dispositivo, vacíos (la bienvenida se decide después).
     expect(await db.select(db.localSettings).get(), isEmpty);
+    // v5: alertas de presupuesto registradas, vacía.
+    expect(await db.select(db.sentBudgetAlerts).get(), isEmpty);
+  });
+
+  test('v4 → v5 agrega alertas_enviadas y conserva los datos', () async {
+    final directory = await Directory.systemTemp.createTemp('mislukas_v4_');
+    addTearDown(() => directory.delete(recursive: true));
+    final file = File('${directory.path}/v4.sqlite');
+
+    // Una base v4: la actual sin la tabla nueva, con un ajuste guardado.
+    final v4 = AppDatabase(NativeDatabase(file));
+    await v4
+        .into(v4.localSettings)
+        .insert(LocalSettingsCompanion.insert(key: 'bienvenida', value: 'x'));
+    await v4.customStatement('DROP TABLE alertas_enviadas');
+    await v4.customStatement('PRAGMA user_version = 4');
+    await v4.close();
+
+    final db = AppDatabase(NativeDatabase(file));
+    addTearDown(db.close);
+    final version = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(version.read<int>('user_version'), 5);
+    expect((await db.select(db.localSettings).getSingle()).value, 'x');
+    await db
+        .into(db.sentBudgetAlerts)
+        .insert(
+          SentBudgetAlertsCompanion.insert(
+            categoryId: DefaultCategory.mercado.id,
+            month: DateTime(2026, 9),
+            threshold: 75,
+            sentAt: DateTime.utc(2026, 9, 22),
+          ),
+        );
+    expect(await db.select(db.sentBudgetAlerts).get(), hasLength(1));
+
+    final fresh = openTestDatabase();
+    addTearDown(fresh.close);
+    expect(await schemaOf(db), await schemaOf(fresh));
   });
 
   test('el esquema migrado es igual al de una instalación nueva', () async {

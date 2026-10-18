@@ -356,6 +356,16 @@ Cuando el usuario cambia de aplicación, el sistema guarda una captura de la pan
 
 Bloquear las capturas de pantalla tiene un costo: el usuario tampoco puede capturar sus reportes para compartirlos. Por eso la protección se aplica a las pantallas con información financiera, y en una versión futura se ofrecerá la exportación de reportes (4.2) como alternativa controlada.
 
+8.8.3.1 Notificaciones de alertas de presupuesto (Fase 6B)
+
+Una notificación puede aparecer con el celular bloqueado, a la vista de cualquiera. Por eso las alertas de presupuesto (docs/07 §7.4):
+
+- **Nunca llevan montos**, ni en la pantalla de bloqueo ni con el celular desbloqueado. El texto solo dice el porcentaje, la categoría y, en la del 100%, el mes: "Llevas el 78% de tu presupuesto de Mercado.", "Llegaste al 100% de tu presupuesto de Mercado de octubre." o "Superaste tu presupuesto de Mercado de octubre.". El monto restante solo se ve dentro de la app.
+- **Son privadas en la pantalla de bloqueo** (`NotificationVisibility.private`): en una pantalla de bloqueo segura, Android muestra solo que hay una notificación de MisLukas, sin el texto.
+- **El payload no tiene datos**: es solo la ruta de Presupuestos (`/profile/budgets`), y la app no acepta otra ruta desde una notificación. Al tocarla, la pantalla solo se abre con la sesión lista. En la Fase 6C ese camino deberá pasar primero por el desbloqueo con PIN o biometría (8.8.2).
+- **No hay notificaciones programadas** ni trabajo en segundo plano: la app no declara alarmas exactas, arranque del sistema ni servicios en primer plano.
+- El registro de alertas enviadas (tabla `alertas_enviadas`) y los ajustes de notificaciones viven en la base cifrada.
+
 8.8.4 Borrado de datos locales
 
 Al cerrar sesión, al eliminar la cuenta o al superar los intentos fallidos del PIN, la aplicación elimina del dispositivo:
@@ -363,6 +373,7 @@ Al cerrar sesión, al eliminar la cuenta o al superar los intentos fallidos del 
 - La base de datos local.
 - Las imágenes de recibos.
 - La clave de cifrado de la base y la de las imágenes de recibos (se borran primero: sin ellas, lo que quede es ilegible).
+- Las notificaciones de alertas que estén a la vista, y con la base, el registro de alertas enviadas y los ajustes de notificaciones (Fase 6B).
 - Los tokens de sesión.
 - El hash del PIN.
 

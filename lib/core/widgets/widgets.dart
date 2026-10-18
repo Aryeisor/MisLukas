@@ -24,6 +24,7 @@ export 'app_segmented_tabs.dart';
 export 'app_snackbar.dart';
 export 'app_stat_card.dart';
 export 'app_summary_card.dart';
+export 'app_switch_tile.dart';
 export 'app_text_field.dart';
 export 'app_variation_bar.dart';
 export 'category_icon.dart';

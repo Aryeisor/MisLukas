@@ -11,6 +11,9 @@ import 'package:mislukas/core/database/local_data_wiper.dart';
 import 'package:mislukas/core/security/database_key_store.dart';
 import 'package:mislukas/core/security/device_session_store.dart';
 import 'package:mislukas/core/security/receipt_key_store.dart';
+import 'package:mislukas/features/budgets/data/drift_budget_alert_log.dart';
+import 'package:mislukas/features/budgets/domain/entities/budget_alert.dart';
+import 'package:mislukas/features/budgets/domain/entities/default_categories.dart';
 import 'package:mislukas/features/onboarding/data/drift_onboarding_repository.dart';
 import 'package:path/path.dart' as p;
 
@@ -51,11 +54,12 @@ void main() {
       receiptKeyStore: receiptKeyStore,
       sessionStore: sessionStore,
       onWiped: () => events.add('wiped'),
+      cancelNotifications: () async => events.add('notifications'),
     );
 
     await wiper.wipe();
 
-    expect(events, ['close', 'wiped']);
+    expect(events, ['notifications', 'close', 'wiped']);
     for (final name in FileLocalDataWiper.databaseFiles) {
       expect(File(p.join(directory.path, name)).existsSync(), isFalse);
     }
@@ -90,6 +94,45 @@ void main() {
     final fresh = AppDatabase(NativeDatabase(file));
     addTearDown(fresh.close);
     expect(await DriftOnboardingRepository(fresh).isWelcomeDone(), isFalse);
+  });
+
+  test('las alertas registradas se van con el archivo de la base', () async {
+    driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+    final file = File(p.join(directory.path, databaseFileName));
+    final db = AppDatabase(NativeDatabase(file));
+    final september = DateTime(2026, 9);
+    await DriftBudgetAlertLog(db).record(september, [
+      (DefaultCategory.mercado.id, BudgetAlertThreshold.warning),
+    ], at: DateTime.utc(2026, 9, 22));
+    await DriftBudgetAlertLog(db).markBaseline();
+
+    await FileLocalDataWiper(
+      closeDatabase: db.close,
+      directory: () async => directory,
+      keyStore: DatabaseKeyStore(const FlutterSecureStorage()),
+      receiptKeyStore: ReceiptKeyStore(const FlutterSecureStorage()),
+      sessionStore: const SecureDeviceSessionStore(FlutterSecureStorage()),
+      onWiped: () {},
+    ).wipe();
+
+    final fresh = AppDatabase(NativeDatabase(file));
+    addTearDown(fresh.close);
+    expect(await DriftBudgetAlertLog(fresh).sentFor(september), isEmpty);
+    expect(await DriftBudgetAlertLog(fresh).hasBaseline(), isFalse);
+  });
+
+  test('si quitar las notificaciones falla, el borrado sigue', () async {
+    var wiped = false;
+    await FileLocalDataWiper(
+      closeDatabase: () async {},
+      directory: () async => directory,
+      keyStore: DatabaseKeyStore(const FlutterSecureStorage()),
+      receiptKeyStore: ReceiptKeyStore(const FlutterSecureStorage()),
+      sessionStore: const SecureDeviceSessionStore(FlutterSecureStorage()),
+      onWiped: () => wiped = true,
+      cancelNotifications: () async => throw StateError('sin plugin'),
+    ).wipe();
+    expect(wiped, isTrue);
   });
 
   test('sin archivos no falla', () async {

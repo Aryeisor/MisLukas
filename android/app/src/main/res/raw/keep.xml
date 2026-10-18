@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- El ícono de las notificaciones se usa por nombre desde Dart: sin esta
+     regla, la reducción de recursos del build release lo quitaría (Fase 6B). -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_alerta" />

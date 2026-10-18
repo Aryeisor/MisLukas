@@ -23,6 +23,7 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
   CategoryKind _category = CategoryKind.mercado;
   int? _amount = 87400;
   bool _acceptedTerms = false;
+  bool _alertsEnabled = true;
   late final Future<(Uint8List, Rect)> _sampleReceipt = drawSampleReceipt(
     Theme.of(context).textTheme.bodyMedium ?? const TextStyle(),
   );
@@ -367,7 +368,7 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
             ],
           ),
 
-          _section('Contraseña y casilla'),
+          _section('Contraseña, casilla e interruptor'),
           const AppPasswordStrength(
             strength: PasswordStrength.medium,
             requirements: [
@@ -391,6 +392,14 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
               ),
               const AppTextSegment(' (Ley 1581 de 2012)'),
             ],
+          ),
+          _gap,
+          AppSwitchTile(
+            title: 'Notificaciones de presupuesto',
+            subtitle: 'Te avisamos al 75% y al 100%',
+            icon: Icons.notifications_outlined,
+            value: _alertsEnabled,
+            onChanged: (value) => setState(() => _alertsEnabled = value),
           ),
 
           _section('Código de verificación'),

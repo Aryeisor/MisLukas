@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'core/config/env.dart';
+import 'core/notifications/local_notifications.dart';
 import 'core/security/device_session_store.dart';
 import 'core/security/secure_auth_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
@@ -39,9 +40,17 @@ Future<void> main() async {
   // Dueño de la base local, para decidir la pantalla inicial sin esperar.
   final owner = await sessionStore.readOwner().catchError((Object _) => null);
 
+  // Antes de runApp para saber si una notificación abrió la app. No pide el
+  // permiso: se pide al crear el primer presupuesto (docs/07 §7.9).
+  final notifications = LocalNotifications();
+  await notifications.initialize();
+
   runApp(
     ProviderScope(
-      overrides: [initialLocalOwnerProvider.overrideWithValue(owner)],
+      overrides: [
+        initialLocalOwnerProvider.overrideWithValue(owner),
+        localNotificationsProvider.overrideWithValue(notifications),
+      ],
       child: const MisLukasApp(),
     ),
   );

@@ -6,6 +6,7 @@ import '../../../core/router/app_routes.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../auth/presentation/widgets/auth_flow_scaffold.dart';
+import '../../budgets/presentation/notification_permission_flow.dart';
 import '../../budgets/presentation/widgets/budget_limit_field.dart';
 import '../../movements/presentation/confirm_movement_view_model.dart';
 import '../../movements/presentation/widgets/income_form_fields.dart';
@@ -63,6 +64,9 @@ class WelcomeScreen extends ConsumerWidget {
       AppSnackbar.error(context, error);
       return;
     }
+    // Con el primer presupuesto, las alertas empiezan a tener sentido.
+    await maybeAskNotificationPermission(context, ref);
+    if (!context.mounted) return;
     await _finish(context, ref);
   }
 

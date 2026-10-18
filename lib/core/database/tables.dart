@@ -168,3 +168,24 @@ class LocalSettings extends Table {
   @override
   Set<Column<Object>> get primaryKey => {key};
 }
+
+/// Alertas de presupuesto ya registradas en este dispositivo: una por
+/// categoría, mes y umbral (v5). No se sincroniza: en otro celular una alerta
+/// puede repetirse una vez. Se borra con el resto de los datos locales.
+@DataClassName('SentBudgetAlertRow')
+class SentBudgetAlerts extends Table {
+  @override
+  String get tableName => 'alertas_enviadas';
+
+  TextColumn get categoryId =>
+      text().named('categoria_id').references(Categories, #id)();
+
+  /// Primer día del mes.
+  TextColumn get month => text().named('mes').map(const SqlDateConverter())();
+  IntColumn get threshold =>
+      integer().named('umbral').check(threshold.isIn(const [75, 100]))();
+  DateTimeColumn get sentAt => dateTime().named('enviada_en')();
+
+  @override
+  Set<Column<Object>> get primaryKey => {categoryId, month, threshold};
+}

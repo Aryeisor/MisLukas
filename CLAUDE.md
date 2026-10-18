@@ -53,7 +53,7 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - `perfiles` se crea con un trigger SECURITY DEFINER en `auth.users`, que rechaza el registro si falta `politica_version`. Guarda `politica_aceptada_en`. El usuario solo puede actualizar `nombre` (grant por columna).
 - El check del tipo de movimiento se llama `movimientos_tipo_check`, para ampliarlo con una migración (por ejemplo, 'saldo_inicial').
 - Bucket privado `recibos`: 5 MB, JPEG y PNG, ruta `{usuario_id}/{recibo_id}.jpg` sin subcarpetas. Hay políticas de select, insert y update; ninguna de delete. `recibos.ruta_storage` debe empezar por la carpeta del dueño.
-- Base local en la versión 4 de Drift. En la v2, `recibos.ruta_local` admite null (un recibo que llega del servidor no trae la imagen) y `Receipt.localPath` es `String?`. En la v3, `cola_sincronizacion` tiene `proximo_intento` y `ultimo_error` (solo el código). En la v4 se agrega `ajustes_locales` (clave, valor): ajustes del dispositivo, sin sincronizar, que se borran con la base.
+- Base local en la versión 5 de Drift. En la v2, `recibos.ruta_local` admite null (un recibo que llega del servidor no trae la imagen) y `Receipt.localPath` es `String?`. En la v3, `cola_sincronizacion` tiene `proximo_intento` y `ultimo_error` (solo el código). En la v4 se agrega `ajustes_locales` (clave, valor): ajustes del dispositivo, sin sincronizar, que se borran con la base. En la v5 (6B) se agrega `alertas_enviadas` (categoria_id, mes, umbral 75/100, enviada_en; PK de las tres primeras), tampoco sincronizada.
 - DTOs remotos (5B) en `features/*/data/remote/`. Convierten entre filas de Drift y JSON de Supabase con `RemoteJson` (`core/sync/remote_json.dart`). `toCompanion()` deja `estado_sync = 'sincronizado'`, y el de recibos no toca `ruta_local`.
 - Sincronización (5C) en `core/sync/`:
   - `SyncService` hace push, luego pull, y otro push si el pull dejó algo en la cola. Solo corre una ejecución a la vez.
@@ -73,9 +73,10 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
   - 2 s después de cada escritura (observa la cola);
   - al volver a primer plano (`SyncTriggers` en `app.dart`);
   - cada 5 min;
-  - sin conexión, con reintentos a 5, 10, 20, 40 y 60 s.
+  - sin conexión, con reintentos a 5, 10, 20, 40 y 60 s;
+  - al recuperar la red (connectivity_plus, 6B), 2 s después del último cambio.
 
-  Sin connectivity_plus (Fase 6), "sin conexión" es el resultado del último intento. `syncAutoTriggersProvider` lo apaga en las pruebas.
+  "Sin conexión" combina las dos señales (ver Señal de conexión, 6B). `syncAutoTriggersProvider` lo apaga en las pruebas.
 - La base local tiene dueño: el id del usuario se guarda en `flutter_secure_storage` (`DeviceSessionStore`). `AccountSessionController` (`features/auth/presentation/`) da el estado `signedOut`, `foreignData`, `wiping` o `ready`. El router solo cuenta la sesión con `ready`.
   - Si entra otro usuario, `ForeignDataPrompt` pide confirmar y se borra todo antes de abrir la base. Hay uno solo, global: está montado en el `builder` de `MaterialApp.router` y abre su diálogo en el navegador raíz (`rootNavigatorKeyProvider`). Así aparece una sola vez después del login, de verificar el registro o en cualquier pantalla. Si no puede mostrarse, cierra la sesión con un mensaje (`accountNoticeProvider`).
   - El borrado (`FileLocalDataWiper`) borra primero la clave y el dueño. Después cierra la base (con tope de 5 s) y borra los archivos; los errores de esos dos pasos se ignoran. Al abrir, una base sin clave guardada se descarta (`deleteStaleDatabase`).
@@ -141,6 +142,51 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
   - `ReceiptParser` evalúa palabras clave, exclusiones y fechas por línea de ML Kit (`ReceiptRow.lines`, `ReceiptLine`), no por fila visual: el texto de otro papel a la misma altura no descarta la fila ni aporta su monto. El visor dice "Ubica el recibo dentro del marco, sobre una superficie lisa y sin otros papeles" (`ReceiptFrameHint`).
   - Respaldo en Storage pendiente: `ruta_storage` sigue en null, la foto solo vive en el celular donde se tomó. Eliminar solo la foto (docs/08 §8.9.3) también queda pendiente.
 - Android (6A): el manifiesto declara `CAMERA`, la cámara como no obligatoria (`camera.any` con `tools:replace`) y quita `RECORD_AUDIO` y `WRITE_EXTERNAL_STORAGE`, que agrega `camera_android_camerax`, y `READ_EXTERNAL_STORAGE`, que el combinador agrega como implícito. `android/app/proguard-rules.pro` tiene los `-dontwarn` de los reconocedores de ML Kit de otros alfabetos, sin los que R8 falla. iOS: `NSCameraUsageDescription` y `NSPhotoLibraryUsageDescription` en `Info.plist`; quedan para el Mac la macro `PERMISSION_CAMERA=1` en el Podfile y el mínimo de iOS 15.5 de ML Kit.
+- Android (6B):
+  - `build.gradle.kts` activa core library desugaring (`desugar_jdk_libs` 2.1.4), que exige flutter_local_notifications. El minSdk de Flutter ya es 24.
+  - El manifiesto `main` declara `INTERNET` (antes solo estaba en `debug/` y `profile/`), `ACCESS_NETWORK_STATE` y `POST_NOTIFICATIONS`.
+  - `res/drawable/ic_stat_alerta.xml` es el ícono de la notificación, y `res/raw/keep.xml` lo protege de la reducción de recursos.
+  - El manifiesto combinado de release no tiene `SCHEDULE_EXACT_ALARM`, `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, `USE_FULL_SCREEN_INTENT` ni `FOREGROUND_SERVICE`. Si un plugin los agregara, se quitan con `tools:node="remove"`.
+  - iOS: queda para el Mac la macro `PERMISSION_NOTIFICATIONS=1`.
+- Alertas de presupuesto (6B, RF-32, docs/07 §7.4):
+  - `NotifyBudgetAlerts` (`budgets/domain/usecases/`) evalúa el mes actual y usa `pendingBudgetAlerts` (`budget_alert_notice.dart`). Registra todos los umbrales cruzados que faltan (`BudgetAlertLog`, tabla `alertas_enviadas`) y notifica solo el más alto. Registra antes de notificar.
+  - Nada se quita del registro: si el gasto baja o el límite sube, el umbral no se repite en el mes.
+  - Línea base: la primera evaluación de una base (`alertas_linea_base` en `ajustes_locales`) registra lo ya cruzado sin notificar. `BudgetAlertNotificationController` no evalúa hasta la primera sincronización exitosa de la sesión (`SyncState.lastSyncedAt != null`), salvo que ya exista la línea base.
+  - El controlador, en `SyncTriggers`, se suscribe a `WatchBudgetAlerts` del mes: cubre registrar, editar o eliminar un gasto, crear, cambiar o quitar un presupuesto y el pull. También evalúa al terminar cada sincronización.
+    - Observa `clockProvider`, así que "Adelantar un mes" evalúa el mes nuevo. Si el mes cambia con la app abierta, se reinicia en la siguiente sincronización.
+    - Corre una evaluación a la vez y repite si llegó otro cambio. No usa temporizador: un `Timer` pendiente rompería las pruebas de widgets.
+  - Texto (`BudgetAlertNotice.body`), sin montos:
+    - "Llevas el 78% de tu presupuesto de Mercado."
+    - "Llegaste al 100% de tu presupuesto de Mercado de octubre." (exactamente 100)
+    - "Superaste tu presupuesto de Mercado de octubre." (más de 100)
+    - Título "Alerta de presupuesto".
+  - `LocalNotifications` (`core/notifications/`): se inicializa en `main()` y se pasa por override.
+    - Canal `alertas_presupuesto`, `NotificationVisibility.private`.
+    - Id estable FNV-1a de categoría y mes (`budgetAlertNotificationId`), así la del 100% reemplaza a la del 75%.
+    - Payload: solo `/profile/budgets`.
+    - No se programan notificaciones.
+  - `NotificationTapLauncher` (en el `builder`, junto a `WelcomeLauncher`) hace push a Presupuestos con la sesión `ready`. Solo acepta esa ruta. **6C: ese camino debe pasar por el desbloqueo.**
+  - Permiso (`NotificationPermissionService`, `Permission.notification` de permission_handler 12.0.3):
+    - `maybeAskNotificationPermission` (`budgets/presentation/notification_permission_flow.dart`) se llama después de guardar un presupuesto (Presupuestos y paso 2 de la bienvenida).
+    - Explicación previa "Te avisamos de tus presupuestos" con "Permitir" / "Ahora no" (`showAppConfirmDialog` con `cancelLabel`).
+    - Solo si no se explicó antes (`permiso_notificaciones_explicado`), el interruptor está activo y el permiso está en `denied`. Se marca con cualquier respuesta: no se insiste.
+  - Interruptor propio en Perfil › Preferencias (`NotificationSettingsTile` con `AppSwitchTile`, `NotificationSettingsViewModel`), guardado en `notificaciones_presupuesto`.
+    - Apagado o sin permiso, se registra sin notificar: al activarlo no llegan avisos viejos.
+    - Activarlo pide el permiso. Con negado permanente o restringido ofrece "Abrir Ajustes", y al volver a primer plano se revisa.
+  - Al borrar los datos locales, `FileLocalDataWiper` llama a `cancelNotifications` (errores ignorados). El registro y los ajustes se van con la base.
+  - Limitaciones (docs/07 §7.4):
+    - Sin trabajo en segundo plano.
+    - Otro celular puede repetir una alerta una vez.
+    - Sin notificaciones antes de la primera sincronización.
+    - Solo el mes actual.
+- Señal de conexión (6B, docs/07 §7.8):
+  - `NetworkMonitor` (`core/sync/network_monitor.dart`, connectivity_plus).
+  - `SyncState` tiene `hasNetwork` y `lastAttemptOffline`; `isOffline` es `!hasNetwork || lastAttemptOffline`, así que `MainShell` y el Perfil no cambiaron.
+  - Sin red: aviso inmediato y sin backoff (queda el intervalo de 5 min).
+  - Al volver la red: `reconnectDebounce` de 2 s (cada cambio reinicia la espera), se reinicia el backoff y, si hay una sincronización en curso, se repite al terminar.
+  - El aviso solo se quita con una sincronización `ok`.
+  - Sin sesión lista (cierre de sesión, otro usuario, borrado) o con una base nueva, `SyncController` vuelve al estado inicial y olvida `lastSyncedAt`: la siguiente cuenta no ve en el Perfil la hora de sincronización de la anterior.
+  - Solo se escucha con `syncAutoTriggersProvider`. `TestSession` trae `FakeNetworkMonitor`, `FakeBudgetAlertNotifier` y `FakeNotificationPermission` (concedido por defecto).
 - Fecha simulada solo en desarrollo: `clockProvider` usa `MonthShiftedClock` si `debugMonthOffsetProvider` es distinto de 0 y `kDebugMode`. Lo controlan "Adelantar un mes" y "Volver a la fecha real" en `DemoDataActions`; el desfase vive en memoria. Mientras está adelantada, todo lo que se guarda lleva fechas y `actualizado_en` futuros (que ganarían conflictos reales): solo se usa con una cuenta de prueba que se elimina al final.
 
 ## Stack
@@ -153,7 +199,7 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - **uuid**, **path_provider** y **flutter_secure_storage**: ya incorporadas en la Fase 4 (identificadores, ubicación de la base y clave de cifrado).
 - **Supabase** (`supabase_flutter`, incorporado en la Fase 5A): Auth, PostgreSQL con Row Level Security y Storage (Fase 5).
 - **flutter_localizations** (del SDK, incorporado en la Fase 5D): textos del sistema en español (calendario).
-- **Paquetes del dispositivo** (Fase 6): `camera`, `image_picker`, `google_mlkit_text_recognition`, `flutter_local_notifications`, `local_auth`, `connectivity_plus`. En la 6A se incorporaron `camera`, `image_picker` y `google_mlkit_text_recognition`, más `permission_handler` (permiso de cámara) y `cryptography` + `cryptography_flutter` (cifrado de las imágenes), aprobados aparte. Las versiones de la Fase 6 van fijas en pubspec.yaml (sin `^`). `permission_handler` va en 12.0.3: las 13.x traen `permission_handler_android` 14.x, que exige compileSdk 37, y el AGP 9.1 del proyecto recomienda como máximo 36.
+- **Paquetes del dispositivo** (Fase 6): `camera`, `image_picker`, `google_mlkit_text_recognition`, `flutter_local_notifications`, `local_auth`, `connectivity_plus`. En la 6A se incorporaron `camera`, `image_picker` y `google_mlkit_text_recognition`, más `permission_handler` (permiso de cámara) y `cryptography` + `cryptography_flutter` (cifrado de las imágenes), aprobados aparte. En la 6B, `flutter_local_notifications` 22.3.2 (la 23 exige compileSdk 37) y `connectivity_plus` 7.3.2. Las versiones de la Fase 6 van fijas en pubspec.yaml (sin `^`). `permission_handler` va en 12.0.3: las 13.x traen `permission_handler_android` 14.x, que exige compileSdk 37, y el AGP 9.1 del proyecto recomienda como máximo 36.
 
 No agregues dependencias de una fase futura ni paquetes fuera de esta lista sin consultarme.
 
@@ -183,7 +229,8 @@ lib/
 │   ├── utils/       # CurrencyFormatter, validaciones, fechas
 │   ├── security/    # (Fase 5-6) almacenamiento seguro, biometría
 │   ├── database/    # (Fase 4) Drift, tablas, migraciones
-│   ├── sync/        # (Fase 5) sincronización
+│   ├── sync/        # (Fase 5) sincronización y señal de red
+│   ├── notifications/ # (Fase 6B) notificaciones locales
 │   └── errors/      # Errores y mensajes para el usuario
 └── features/
     ├── auth/        # Login, registro, recuperación, desbloqueo
@@ -235,7 +282,8 @@ En `lib/core/widgets/`. Importar siempre desde `package:mislukas/core/widgets/wi
 - `AppEmptyState`: estado vacío con ícono, título, descripción y acción opcional.
 - `AppOfflineIndicator`: aviso discreto de "Sin conexión".
 - `AppSnackbar`: `AppSnackbar.success` / `AppSnackbar.error` / `AppSnackbar.info` para mensajes breves.
-- `showAppConfirmDialog`: diálogo de confirmación con "Cancelar" y una acción (en rojo con `destructive`); devuelve true si el usuario confirma.
+- `showAppConfirmDialog`: diálogo de confirmación con "Cancelar" (o `cancelLabel`, como "Ahora no") y una acción (en rojo con `destructive`); devuelve true si el usuario confirma.
+- `AppSwitchTile`: ajuste con ícono, título, descripción e interruptor; toda la tarjeta lo cambia ("Notificaciones de presupuesto").
 - `DemoDataActions` (`core/widgets/dev/`): "Cargar datos de demostración", "Borrar todos los datos" y la fecha simulada ("Adelantar un mes"); solo se muestra en modo desarrollo.
 - `AppBottomNav`: barra inferior con Inicio, Reportes, Simular y Perfil.
 - `AppDonutChart` / `AppChartSegment`: gráfico de dona (CustomPainter) con contenido central y descripción para lectores de pantalla.
