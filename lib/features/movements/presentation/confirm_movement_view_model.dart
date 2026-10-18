@@ -10,10 +10,10 @@ import '../../../core/utils/utils_providers.dart';
 import '../../../core/utils/validators.dart';
 import '../data/movements_providers.dart';
 import '../domain/entities/movement.dart';
-import 'movement_entry_method.dart';
-
-/// Máximo de caracteres de la nota.
-const int movementNoteMaxLength = 200;
+import '../domain/entities/receipt_suggestion.dart';
+import '../domain/usecases/register_movement.dart';
+import 'receipt/receipt_capture.dart';
+import 'receipt/receipt_drafts.dart';
 
 /// Categorías que se pueden elegir para un gasto. Incluye Otros (RF-27),
 /// aunque el boceto 5.7 no la muestra.
@@ -35,18 +35,29 @@ sealed class ConfirmMovementMode {
   const ConfirmMovementMode();
 }
 
-/// Registrar un gasto nuevo con [method].
-class CreateMovementMode extends ConfirmMovementMode {
-  const CreateMovementMode(this.method);
+/// Registrar un gasto nuevo a mano ("Registra tu gasto").
+class CreateManualMovementMode extends ConfirmMovementMode {
+  const CreateManualMovementMode();
 
-  final MovementEntryMethod method;
+  @override
+  bool operator ==(Object other) => other is CreateManualMovementMode;
+
+  @override
+  int get hashCode => (CreateManualMovementMode).hashCode;
+}
+
+/// Registrar un gasto con la foto del recibo ya leída ("Confirma los datos").
+class CreatePhotoMovementMode extends ConfirmMovementMode {
+  const CreatePhotoMovementMode(this.capture);
+
+  final ReceiptCapture capture;
 
   @override
   bool operator ==(Object other) =>
-      other is CreateMovementMode && other.method == method;
+      other is CreatePhotoMovementMode && other.capture == capture;
 
   @override
-  int get hashCode => Object.hash(CreateMovementMode, method);
+  int get hashCode => Object.hash(CreatePhotoMovementMode, capture);
 }
 
 /// Registrar un ingreso nuevo (RF-50): categoría Ingreso, origen manual y sin
@@ -84,6 +95,7 @@ class ConfirmMovementState {
     this.category,
     this.note = '',
     this.description = '',
+    this.merchant = '',
     this.date,
     this.isIncome = false,
     this.isSaving = false,
@@ -93,6 +105,10 @@ class ConfirmMovementState {
   final int? amount;
   final CategoryKind? category;
   final String note;
+
+  /// Comercio del gasto por foto, precargado con lo que leyó el OCR. Se
+  /// guarda como descripción; vacío, se usa el nombre de la categoría.
+  final String merchant;
 
   /// Descripción del ingreso ("Salario"). Los gastos no la editan.
   final String description;
@@ -108,6 +124,15 @@ class ConfirmMovementState {
 
   bool get isEditing => mode is EditMovementMode;
 
+  /// Recibo del gasto por foto; null en los demás modos.
+  ReceiptCapture? get receipt => switch (mode) {
+    CreatePhotoMovementMode(:final capture) => capture,
+    _ => null,
+  };
+
+  /// Resultado de la lectura del recibo; null si no es un gasto por foto.
+  ReceiptScanStatus? get scanStatus => receipt?.suggestion.status;
+
   /// Categorías que se pueden elegir según el tipo del movimiento.
   List<CategoryKind> get categoryOptions =>
       isIncome ? incomeCategoryOptions : expenseCategoryOptions;
@@ -120,6 +145,7 @@ class ConfirmMovementState {
     CategoryKind? category,
     String? note,
     String? description,
+    String? merchant,
     DateTime? date,
     bool? isSaving,
   }) {
@@ -129,6 +155,7 @@ class ConfirmMovementState {
       category: category ?? this.category,
       note: note ?? this.note,
       description: description ?? this.description,
+      merchant: merchant ?? this.merchant,
       date: date ?? this.date,
       isIncome: isIncome,
       isSaving: isSaving ?? this.isSaving,
@@ -139,23 +166,6 @@ class ConfirmMovementState {
 /// Resultado de guardar o eliminar: null si salió bien; si no, el mensaje
 /// para el usuario.
 typedef ConfirmMovementResult = String?;
-
-// SOLO DEMO: datos que "leyó" el OCR en la variante foto (Fase 6 usa ML Kit).
-const int demoReceiptTotal = 87400;
-const CategoryKind demoReceiptCategory = CategoryKind.mercado;
-const String demoReceiptMerchantName = 'Éxito';
-const String demoReceiptHeader = 'ÉXITO AV. EL DORADO';
-const String demoReceiptTaxId = '890.900.608-9';
-
-/// Productos del recibo de la demo; suman [demoReceiptTotal].
-const List<(String, int)> demoReceiptItems = [
-  ('Leche larga vida x2', 8900),
-  ('Pan tajado', 4500),
-  ('Huevos x30', 19800),
-  ('Aceite 900ml', 12400),
-  ('Pollo pechugas', 23800),
-  ('Arroz x5kg', 18000),
-];
 
 final confirmMovementViewModelProvider = AsyncNotifierProvider.autoDispose
     .family<
@@ -169,20 +179,19 @@ class ConfirmMovementViewModel extends AsyncNotifier<ConfirmMovementState> {
 
   final ConfirmMovementMode mode;
 
+  /// El gasto por foto ya se guardó: su imagen ya no es un borrador.
+  bool _receiptSaved = false;
+
   // Al registrar, el estado está listo de inmediato; al editar, primero se
   // carga el movimiento.
   @override
   FutureOr<ConfirmMovementState> build() {
     return switch (mode) {
-      CreateMovementMode(method: MovementEntryMethod.photo) =>
-        ConfirmMovementState(
-          mode: mode,
-          amount: demoReceiptTotal,
-          category: demoReceiptCategory,
-          date: ref.read(clockProvider).today(),
-        ),
-      CreateMovementMode(method: MovementEntryMethod.manual) =>
-        ConfirmMovementState(mode: mode, date: ref.read(clockProvider).today()),
+      CreatePhotoMovementMode(:final capture) => _photoState(capture),
+      CreateManualMovementMode() => ConfirmMovementState(
+        mode: mode,
+        date: ref.read(clockProvider).today(),
+      ),
       CreateIncomeMode() => ConfirmMovementState(
         mode: mode,
         category: CategoryKind.ingreso,
@@ -191,6 +200,40 @@ class ConfirmMovementViewModel extends AsyncNotifier<ConfirmMovementState> {
       ),
       EditMovementMode(:final movementId) => _load(movementId),
     };
+  }
+
+  /// Precarga lo que leyó el OCR. Es una sugerencia: todo se puede corregir
+  /// (RF-17). Si el usuario sale sin guardar, la imagen cifrada se borra.
+  ConfirmMovementState _photoState(ReceiptCapture capture) {
+    // Lo que se usa al cerrar se toma ahora: en onDispose no se usa ref.
+    final images = ref.read(receiptImageStoreProvider);
+    final drafts = ref.read(receiptDraftsInProgressProvider.notifier);
+    // La captura ya lo registró; se asegura aquí, fuera de build (no se
+    // modifica otro provider mientras este se construye).
+    Future.microtask(() => drafts.add(capture.receiptId));
+    ref.onDispose(() {
+      if (_receiptSaved) return;
+      unawaited(images.delete(capture.localPath));
+      Future.microtask(() {
+        try {
+          drafts.remove(capture.receiptId);
+        } catch (_) {
+          // El contenedor ya se cerró.
+        }
+      });
+    });
+
+    final suggestion = capture.suggestion;
+    final today = ref.read(clockProvider).today();
+    final category = suggestion.category?.kind;
+    return ConfirmMovementState(
+      mode: mode,
+      amount: suggestion.total,
+      category: expenseCategoryOptions.contains(category) ? category : null,
+      merchant: suggestion.merchant ?? '',
+      // Nunca futura, aunque el reloj haya cambiado desde la lectura.
+      date: suggestion.date.isAfter(today) ? today : suggestion.date,
+    );
   }
 
   Future<ConfirmMovementState> _load(String movementId) async {
@@ -223,6 +266,9 @@ class ConfirmMovementViewModel extends AsyncNotifier<ConfirmMovementState> {
 
   void setNote(String note) => _update((s) => s.copyWith(note: note));
 
+  void setMerchant(String merchant) =>
+      _update((s) => s.copyWith(merchant: merchant));
+
   void setDescription(String description) =>
       _update((s) => s.copyWith(description: description));
 
@@ -245,22 +291,40 @@ class ConfirmMovementViewModel extends AsyncNotifier<ConfirmMovementState> {
 
     return _run(current, () async {
       switch (mode) {
-        case CreateMovementMode(:final method):
+        case CreateManualMovementMode():
           await ref
               .read(registerMovementProvider)
               .call(
                 amount: amount,
                 categoryId: category.categoryId,
-                origin: method == MovementEntryMethod.photo
-                    ? MovementOrigin.photo
-                    : MovementOrigin.manual,
-                // Vacía en el registro manual: se usa el nombre de la categoría.
-                description: method == MovementEntryMethod.photo
-                    ? demoReceiptMerchantName
-                    : '',
+                origin: MovementOrigin.manual,
+                // Vacía: se usa el nombre de la categoría.
+                description: '',
                 note: note.isEmpty ? null : note,
                 date: current.date,
               );
+        case CreatePhotoMovementMode(:final capture):
+          final suggestion = capture.suggestion;
+          await ref
+              .read(registerMovementProvider)
+              .call(
+                amount: amount,
+                categoryId: category.categoryId,
+                origin: MovementOrigin.photo,
+                // Vacío: se usa el nombre de la categoría.
+                description: current.merchant.trim(),
+                note: note.isEmpty ? null : note,
+                date: current.date,
+                // Se guarda lo que leyó el OCR, aunque el usuario lo corrija.
+                receipt: ReceiptDraft(
+                  id: capture.receiptId,
+                  localPath: capture.localPath,
+                  detectedTotal: suggestion.total,
+                  detectedMerchant: suggestion.merchant,
+                ),
+              );
+          _receiptSaved = true;
+          _removeDraft(capture.receiptId);
         case CreateIncomeMode():
           // Vacía: se usa el nombre de la categoría.
           await ref
@@ -293,6 +357,12 @@ class ConfirmMovementViewModel extends AsyncNotifier<ConfirmMovementState> {
               );
       }
     });
+  }
+
+  void _removeDraft(String receiptId) {
+    if (ref.mounted) {
+      ref.read(receiptDraftsInProgressProvider.notifier).remove(receiptId);
+    }
   }
 
   /// Elimina el movimiento que se edita (borrado lógico).

@@ -16,6 +16,8 @@ import '../../features/movements/presentation/confirm_movement_view_model.dart';
 import '../../features/movements/presentation/history/history_screen.dart';
 import '../../features/movements/presentation/movement_entry_method.dart';
 import '../../features/movements/presentation/new_movement_screen.dart';
+import '../../features/movements/presentation/receipt/receipt_capture.dart';
+import '../../features/movements/presentation/receipt/receipt_capture_screen.dart';
 import '../../features/onboarding/presentation/welcome_screen.dart';
 import '../../features/profile/presentation/delete_account_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
@@ -133,13 +135,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: AppRoutes.receiptCapture,
+        builder: (context, state) => const ReceiptCaptureScreen(),
+      ),
+      // Con la foto ya leída (extra), Confirma los datos; sin ella, Registra
+      // tu gasto. Un enlace a la variante foto sin foto abre la captura.
+      GoRoute(
         path: AppRoutes.confirmMovement,
+        redirect: (context, state) =>
+            state.extra is! ReceiptCapture &&
+                MovementEntryMethod.fromName(
+                      state.uri.queryParameters[AppRoutes.methodParam],
+                    ) ==
+                    MovementEntryMethod.photo
+            ? AppRoutes.receiptCapture
+            : null,
         builder: (context, state) => ConfirmMovementScreen(
-          mode: CreateMovementMode(
-            MovementEntryMethod.fromName(
-              state.uri.queryParameters[AppRoutes.methodParam],
-            ),
-          ),
+          mode: switch (state.extra) {
+            final ReceiptCapture capture => CreatePhotoMovementMode(capture),
+            _ => const CreateManualMovementMode(),
+          },
         ),
       ),
       GoRoute(

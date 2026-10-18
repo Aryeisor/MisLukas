@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../core/utils/utils_providers.dart';
 import '../../../core/widgets/dev/demo_data_actions.dart';
+import '../../../core/widgets/dev/receipt_cipher_benchmark_action.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../auth/presentation/auth_messages.dart';
 import 'profile_view_model.dart';
@@ -142,6 +144,14 @@ class ProfileScreen extends ConsumerWidget {
             if (ref.watch(demoToolsEnabledProvider)) ...[
               const SizedBox(height: AppSpacing.xl),
               const DemoDataActions(),
+            ],
+            // También en --profile, para medir en un celular real. Con
+            // kReleaseMode constante, el compilador la quita de la versión de
+            // publicación.
+            if (!kReleaseMode &&
+                ref.watch(receiptBenchmarkEnabledProvider)) ...[
+              const SizedBox(height: AppSpacing.xl),
+              const ReceiptCipherBenchmarkAction(),
             ],
             // Al final y en rojo: fácil de encontrar, difícil de tocar por
             // error (docs/05 pantalla 10).

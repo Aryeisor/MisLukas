@@ -8,7 +8,9 @@ Esta sección describe cada funcionalidad del dispositivo que usa la aplicación
 | ------------------------- | ----------------------------- | ------------------------------------------------- | ----------------------- |
 | Cámara                    | camera                        | Capturar el recibo en el momento de la compra     | RF-14, RNF-12           |
 | Galería                   | image_picker                  | Usar una foto del recibo tomada antes             | RF-14                   |
+| Permiso de cámara         | permission_handler            | Pedir el permiso en el momento y abrir Ajustes    | RF-14                   |
 | OCR en el dispositivo     | google_mlkit_text_recognition | Extraer el valor y el comercio sin escribirlos    | RF-15, RF-16, RNF-13    |
+| Cifrado de las imágenes   | cryptography + cryptography_flutter | Guardar las fotos de recibos cifradas (AES-GCM) | RNF-04, RNF-05          |
 | Notificaciones locales    | flutter_local_notifications   | Avisar antes de pasarse del presupuesto           | RF-32                   |
 | Almacenamiento interno    | path_provider + Drift         | Guardar datos e imágenes disponibles sin conexión | RF-24, RNF-09           |
 | Almacenamiento seguro     | flutter_secure_storage        | Proteger tokens y la clave de cifrado             | RNF-04, RNF-05          |
@@ -23,12 +25,20 @@ La cámara es la puerta de entrada de la funcionalidad principal de MisLukas. Cu
 
 **Cómo funciona.**
 
-- **Guía de encuadre.** La vista muestra un marco con esquinas resaltadas y el texto "Ubica el recibo dentro del marco", que ayuda a obtener una imagen más legible.
+- **Guía de encuadre.** La vista muestra un marco con esquinas resaltadas y el texto "Ubica el recibo dentro del marco, sobre una superficie lisa y sin otros papeles", que ayuda a obtener una imagen más legible y evita que el OCR lea el texto de otro papel (7.3).
 - **Controles.** Incluye un botón de linterna para lugares con poca luz, habituales en el momento de pagar, y un acceso rápido a la galería.
 - **Revisión.** Después de la captura se muestra la foto durante un instante con las opciones "Usar foto" y "Repetir", para descartar imágenes borrosas antes de procesarlas.
 - **Optimización.** La imagen se redimensiona y comprime antes de pasar al OCR. Una resolución más baja sigue siendo suficiente para leer el texto y reduce el tiempo de procesamiento y el espacio ocupado.
 
 **Manejo de la imagen.** La foto se guarda en el directorio privado de la aplicación, al que otras aplicaciones no tienen acceso. **No se guarda en la galería del usuario**, para no mezclar recibos con sus fotos personales ni exponerlos a aplicaciones que tengan acceso a la galería. Si el usuario cancela el registro, la imagen temporal se elimina.
+
+**Implementación (Fase 6A).**
+
+- **Visor propio con camera, no la cámara del sistema.** Además de las razones anteriores, en un celular con poca memoria (por ejemplo, un Galaxy J4) Android puede cerrar MisLukas mientras la app de cámara del sistema está abierta, y el usuario perdería el registro.
+- **Resolución y formato.** La cámara usa `ResolutionPreset.veryHigh` (1080p) y JPEG, sin audio: la app no pide el micrófono. Esa resolución basta para que el OCR lea el texto pequeño del recibo, y la foto pesa entre 300 KB y 1 MB. No se vuelve a comprimir, porque eso necesitaría otro paquete. La medición en un Galaxy J4 confirmó los 1080p (7.5); si otro celular lo exigiera, se baja a 720p cambiando una constante (`receipt_capture_settings.dart`).
+- **Ciclo de vida.** El controlador de la cámara se libera cuando la app pasa a segundo plano y se crea de nuevo al volver, como pide el paquete.
+- **Archivo temporal.** La cámara deja la foto en la caché. La app la mueve de inmediato a `recibos/tmp/` en su almacenamiento privado; la imagen sin cifrar solo existe ahí hasta que termina el OCR (7.5). "Repetir", salir de la pantalla o un error la borran.
+- **Flujo.** Nuevo movimiento › Foto del recibo › Continuar abre `/movements/new/receipt`. Con "Usar foto" se muestra "Leyendo tu recibo…" mientras corren el OCR y el cifrado, y después Confirma los datos reemplaza a la captura: Volver lleva a Nuevo movimiento.
 
 ## 7.2 Galería: subir una foto existente
 
@@ -37,6 +47,8 @@ No siempre es posible fotografiar el recibo en el momento. Muchas personas toman
 **Uso del selector del sistema.** La selección se hace con el selector de fotos que ofrece el propio sistema operativo, mediante image_picker. Con este mecanismo, la aplicación solo recibe la imagen que el usuario eligió, no acceso a toda su galería. En las versiones actuales de Android e iOS, esto permite seleccionar la foto sin conceder un permiso amplio sobre la biblioteca de imágenes. Es la opción más respetuosa con la privacidad: MisLukas no necesita ver las fotos del usuario, solo la del recibo.
 
 Una vez seleccionada, la imagen sigue exactamente el mismo proceso que una foto tomada con la cámara: se copia al directorio privado de la aplicación, se optimiza y pasa al reconocimiento de texto.
+
+**Implementación (Fase 6A).** `pickImage` se llama con `maxWidth` y `maxHeight` de 1920 px, calidad JPEG 85 y `requestFullMetadata: false`, que en iOS evita pedir el permiso de la biblioteca. En Android, image_picker copia la foto a la caché y deja aparte la versión reducida; la copia original se borra de inmediato. Una foto de la galería no pasa por "Usar foto" / "Repetir", porque el usuario ya la eligió. Si después de reducirla pesa más de 5 MB (el límite del bucket de Storage), se muestra "La imagen es muy grande".
 
 ## 7.3 OCR en el dispositivo: extracción del valor y el comercio
 
@@ -52,17 +64,27 @@ Con el procesamiento local, la lectura funciona en cualquier lugar, la imagen no
 
 **Proceso de extracción.** ML Kit entrega el texto del recibo organizado en bloques y líneas. A partir de ahí, la aplicación aplica su propia lógica de interpretación, implementada como un caso de uso de la capa de dominio:
 
-1. **Detección del total.** Se buscan las líneas que contienen palabras clave como "TOTAL", "TOTAL A PAGAR", "VALOR TOTAL" o "NETO". En la misma línea o en la siguiente se busca un valor numérico. Si hay varias coincidencias, se da prioridad a la que aparece más abajo en el recibo, porque en la mayoría de formatos el total final va al pie, después de subtotales e impuestos.
-2. **Normalización del valor.** Los recibos colombianos escriben los montos de formas distintas: "\$87.400", "87,400", "87400" o "87.400,00". La aplicación reconoce estos formatos y los convierte a un número entero de pesos. Si no se encuentra una palabra clave, se propone el valor más alto del recibo como candidato, siempre para que el usuario lo confirme.
-3. **Detección del comercio.** Se toma el texto de las primeras líneas del recibo, donde suele ir el nombre del establecimiento, y se compara con un diccionario local de comercios frecuentes en Colombia (supermercados, cadenas de restaurantes y cafés, estaciones de servicio, droguerías, sistemas de transporte, entre otros).
-4. **Sugerencia de categoría.** Si el comercio está en el diccionario, se sugiere la categoría asociada: un supermercado sugiere Mercado y una cadena de cafés sugiere Ocio. Si no se reconoce, se revisan palabras del propio texto ("supermercado", "droguería", "restaurante") y, si aún no hay coincidencia, no se preselecciona ninguna categoría.
-5. **Resultado para el usuario.** La pantalla "Confirma los datos" muestra el valor, la categoría sugerida y la imagen con el área del total resaltada. El usuario siempre puede corregir antes de guardar (RF-17).
+1. **Filas del recibo.** ML Kit puede entregar "TOTAL" y "\$87.400" en bloques distintos cuando están en columnas. Con la ubicación de cada línea, la aplicación las agrupa en filas visuales (líneas a la misma altura, de izquierda a derecha).
+2. **Detección del total.** Se buscan las filas con palabras clave, sin importar mayúsculas, tildes ni espacios extra, y corrigiendo el cero leído en lugar de la letra O ("VAL0R PAGAD0"). Van de la más fuerte a la más débil:
+   - **Lo que se paga o ya se pagó:** "TOTAL A PAGAR", "VALOR A PAGAR", "TOTAL PAGAR", "NETO A PAGAR", "GRAN TOTAL", "TOTAL CON PROPINA", "TOTAL GENERAL", "VALOR PAGADO", "TOTAL PAGADO", "SALDO PAGADO", "MONTO PAGADO", "VALOR DEL PAGO", "VALOR PAGO", "PAGO TOTAL", "TOTAL A CANCELAR", "VALOR A CANCELAR", "PAGUE ESTE VALOR", "TOTAL PAGO OPORTUNO" y "PAGO OPORTUNO".
+   - **Totales de la factura:** "VALOR TOTAL", "TOTAL FACTURA", "TOTAL FACTURADO", "VALOR FACTURA", "VALOR TOTAL FACTURA", "TOTAL VENTA", "TOTAL COMPRA", "IMPORTE TOTAL", "MONTO TOTAL", "IMPORTE" y "MONTO".
+   - **Por último:** "TOTAL" y "NETO".
+
+   "VALOR" y "SALDO" solos no son palabras clave, porque acompañan a casi cualquier fila de una factura de servicios. Se descartan las filas de subtotal, IVA, base gravable, impoconsumo, propina, descuentos, pago en efectivo, cambio y conteo de productos (salvo en las palabras clave más fuertes, como "TOTAL CON PROPINA"). También se descartan siempre, incluso con las palabras clave más fuertes, las filas de valor unitario, valor del kWh, valor del consumo, subsidio, contribución, IVA, mora e intereses de mora, recargo ("PAGO CON RECARGO"), saldo anterior, saldo pendiente, saldo a favor, pago mínimo, cuota y abono. Las palabras clave y las exclusiones se evalúan sobre la línea de ML Kit que contiene la palabra clave, no sobre toda la fila visual: si el recibo está encima de otro papel, el texto de ese papel a la misma altura (por ejemplo, "CUOTA" o "SALDO") no descarta la fila ni aporta su monto. El valor se toma de esa misma línea; si no tiene, de la siguiente línea de la fila cuando solo tiene un monto, o de la fila de abajo cuando su primera línea a partir de la palabra clave solo tiene un monto. La puntuación pegada no estorba ("PAGADO:\$116,736", "PAGADO :\$ 116,736"). La fecha se busca también línea por línea, para que un "HASTA" o un "VCTO" de otro papel no la descarte. Gana la palabra clave más fuerte y, con empate, la fila más abajo, porque en la mayoría de formatos el total final va al pie, después de subtotales e impuestos.
+3. **Normalización del valor.** Los recibos colombianos escriben los montos de formas distintas: "\$87.400", "87,400", "87400", "87 400" o "87.400,00". La aplicación reconoce estos formatos, corrige la letra O leída en lugar de un cero y los convierte a un número entero de pesos. Ignora NIT, porcentajes, horas, fechas y números de tarjeta. **Si no se encuentra una palabra clave de total, el valor queda vacío** y el usuario lo escribe: proponer el número más alto acertaba a veces, pero también proponía el pago en efectivo o un NIT mal leído.
+4. **Detección del comercio.** Se toma el texto de las primeras líneas del recibo, donde suele ir el nombre del establecimiento, y se compara con un diccionario local de comercios frecuentes en Colombia (supermercados, cadenas de restaurantes y cafés, estaciones de servicio, droguerías, sistemas de transporte, entre otros). Si no está en el diccionario, se usa la primera de las seis primeras filas que no sea un NIT, una dirección, un teléfono o un encabezado de factura, sin la razón social ("S.A.S.", "LTDA").
+5. **Sugerencia de categoría.** Si el comercio está en el diccionario, se sugiere la categoría asociada: un supermercado sugiere Mercado y una cadena de cafés sugiere Ocio. Si no se reconoce, se revisan palabras del propio texto ("supermercado", "droguería", "restaurante") y, si aún no hay coincidencia, no se preselecciona ninguna categoría.
+6. **Fecha de la compra.** Se reconocen "17/10/2026", "17-10-26", "17.10.2026", "2026-10-17" y "17 OCT 2026", siempre con el día antes que el mes. Se prefiere la fila que dice "FECHA" y se ignoran las de la resolución de la DIAN, vigencias, vencimientos, fecha límite de pago y periodos facturados. **Una fecha futura, inexistente o anterior a 2000, o un recibo sin fecha, deja la fecha de hoy.**
+7. **Resultado para el usuario.** La pantalla "Confirma los datos" muestra el valor, el comercio, la categoría sugerida, la fecha y la imagen con el área del total resaltada. El usuario siempre puede corregir todo antes de guardar (RF-17). Un banner indica el resultado de la lectura: verde ("Recibo leído correctamente") si se encontró el total; amarillo ("No encontramos el total") si se leyó el recibo, pero no el total; rojo ("No pudimos leer el recibo. Puedes ingresar el valor manualmente") si no se leyó nada o el OCR falló. En los dos últimos, el flujo sigue de forma manual (RF-18).
+
+**Qué se conserva del texto.** El parser es Dart puro, en la capa de dominio (`ReceiptParser`), y no depende de ML Kit. De todo el texto reconocido solo se conservan el total, el comercio, la fecha, la categoría y la zona del total en la imagen; el resto se descarta en memoria (docs/08 §8.9.3). En el recibo se guardan `total_detectado` y `comercio_detectado` tal como se leyeron, aunque el usuario los corrija en el movimiento. El texto del recibo, los montos y las rutas de archivo nunca se escriben en los registros.
 
 **Por qué reglas y no inteligencia artificial para la categoría.** Para el MVP, un diccionario de comercios y palabras clave es suficiente, transparente y funciona sin conexión. Un modelo de clasificación entrenado podría mejorar la precisión, pero requiere datos de entrenamiento que el proyecto aún no tiene. A futuro, la sugerencia podría aprender de las correcciones del usuario: si siempre cambia un comercio de Otros a Restaurantes, la próxima vez se sugiere Restaurantes.
 
 **Limitaciones conocidas.** La calidad de la lectura depende de la imagen. Los recibos arrugados, los de papel térmico desteñido, los escritos a mano y las fotos con poca luz o movidas pueden producir lecturas incorrectas o incompletas. La aplicación contempla estos casos de tres formas:
 
 - La guía de encuadre y la linterna mejoran la captura.
+- **La foto debe tomarse con el recibo solo, sobre una superficie lisa y sin otros papeles alrededor**, como lo indica el visor. El OCR lee todo el texto de la imagen: aunque el parser evalúa cada línea por separado, el total de otro recibo o de una factura que aparezca junto a él puede tomarse como el valor.
 - El valor siempre es editable.
 - Si no se detecta ningún valor, se informa al usuario y se le permite ingresarlo manualmente (RF-18).
 
@@ -95,9 +117,29 @@ Cada aplicación móvil tiene un espacio de almacenamiento privado dentro del di
 
 **Protección frente a copias de seguridad.** Los sistemas operativos pueden incluir los datos de las aplicaciones en las copias de seguridad automáticas del dispositivo. Para evitar que la base de datos y las imágenes de los recibos terminen en una copia fuera del control de la aplicación, se excluyen de las copias de seguridad del sistema. En Android se desactivaron las copias de seguridad automáticas (android:allowBackup="false") y se definieron reglas de extracción de datos que excluyen la información de la aplicación de la copia en la nube y de la transferencia entre dispositivos. En iOS, la exclusión del archivo de la base de datos queda pendiente para cuando la aplicación se compile en macOS. Esto no implica pérdida de información para el usuario, porque sus datos ya se respaldan en Supabase mediante la sincronización. Aun si el archivo de la base llegara a copiarse, sin la clave de cifrado sería ilegible.
 
+**Imágenes de recibos cifradas (Fase 6A).** Una foto de recibo es un dato financiero: muestra montos, el comercio y a veces un NIT, una cédula o los últimos dígitos de la tarjeta, y conserva todo el texto que la aplicación descarta. Por eso se guarda cifrada:
+
+- **Algoritmo.** AES-256-GCM, cifrado autenticado, con cryptography y cryptography_flutter. Este último usa la implementación nativa del sistema (javax.crypto en Android, CryptoKit en iOS), con aceleración por hardware incluso en celulares de gama baja.
+- **Clave propia.** Una clave aleatoria de 32 bytes, distinta de la de la base, guardada solo en el almacenamiento seguro (`ReceiptKeyStore`). Se crea la primera vez que se guarda un recibo. La creación es idempotente: dos guardados seguidos usan la misma clave.
+- **Formato.** Cada imagen es un archivo `recibos/<id del recibo>.enc` con `nonce (12 bytes) ‖ texto cifrado ‖ MAC (16 bytes)`, con un nonce aleatorio por imagen. El id del recibo va como dato asociado: un archivo cambiado de nombre o de recibo no se descifra. Se escribe en un archivo temporal y se renombra, para no dejar archivos a medias.
+- **Ruta relativa.** `recibos.ruta_local` guarda `recibos/<id>.enc`, relativa al directorio de soporte de la app, porque la ruta absoluta puede cambiar (en iOS, al actualizar la app).
+- **La imagen sin cifrar solo existe durante el OCR**, porque ML Kit lee desde un archivo. Va en `recibos/tmp/` y se borra en cuanto termina el cifrado, también si el OCR o el cifrado fallan, si el usuario repite la foto o si sale de la pantalla.
+- **Vista previa en memoria.** Confirma los datos descifra la imagen en memoria y la muestra con `Image.memory`. El archivo descifrado nunca se escribe en disco.
+- **Sin foto.** Si el recibo no tiene imagen en este celular (por ejemplo, llegó por sincronización desde otro), se muestra "La foto solo está en el celular donde se tomó". Si no se puede descifrar, se muestra "No pudimos mostrar la foto del recibo". La pantalla sigue funcionando.
+- **Limpieza.** Una vez por arranque, cuando la sesión queda lista, se borran las imágenes sin un recibo activo (de un registro interrumpido o de recibos eliminados), lo que quede en `recibos/tmp/` y las fotos que la cámara o la galería dejaron en la caché. Los recibos en curso (captura o confirmación abiertas) nunca se tocan. Eliminar un movimiento también borra su imagen.
+- **Costo.** Se mide en el celular con "Medir cifrado de recibos" (Perfil, solo en modo desarrollo y `--profile`): cifra y descifra 10 veces 1 MB de bytes aleatorios y muestra la mediana. Se acepta hasta 300 ms entre cifrar y descifrar; si un celular de gama baja lo supera, se baja la resolución a 720p. Medición en un celular de gama baja:
+
+  | Dispositivo                     | Compilación | Tamaño | Cifrar (mediana) | Descifrar (mediana) | Total  | Criterio |
+  | ------------------------------- | ----------- | ------ | ---------------- | ------------------- | ------ | -------- |
+  | Samsung Galaxy J4 (armeabi-v7a) | `--profile` | 1 MB   | 48 ms            | 54 ms               | 102 ms | ≤ 300 ms |
+
+  Mediana de 10 corridas. El total queda en un tercio del criterio y el OCR no mostró un retardo perceptible en el mismo celular (RNF-13), así que se mantiene la resolución de 1080p.
+
 **Espacio ocupado.** Los datos estructurados ocupan muy poco espacio: miles de movimientos caben en unos pocos megabytes. Las imágenes son lo que más crece, por eso se comprimen al guardarse. En una versión futura se podrá configurar que las imágenes de recibos con más de cierto tiempo se eliminen del dispositivo, conservando los datos del movimiento.
 
-**Al cerrar sesión o eliminar la cuenta**, la aplicación borra la base de datos local, las imágenes y la clave de cifrado, de modo que no quede información financiera en el dispositivo (RF-13, RF-48).
+**Al cerrar sesión o eliminar la cuenta**, la aplicación borra la base de datos local, las imágenes y las claves de cifrado de la base y de las imágenes, de modo que no quede información financiera en el dispositivo (RF-13, RF-48). Las claves se borran primero: sin ellas, lo que quede de la base o de las imágenes es ilegible.
+
+**Respaldo de las fotos en Storage (pendiente).** En la Fase 6A las fotos solo viven en el celular donde se tomaron: `ruta_storage` queda en null, en otro celular el recibo llega sin imagen y al cerrar sesión la foto se pierde. El respaldo opcional en el bucket privado `recibos` (docs/08 §8.9.3) queda para una parte posterior: necesita un ajuste en el Perfil (apagado por defecto), una cola de archivos que suba la imagen después de que la fila del recibo se sincronice, reintentos sin conexión, actualizar `ruta_storage`, borrar el objeto al eliminar el recibo y URLs firmadas para verla en otro celular. También habrá que decidir si se sube descifrada (el bucket privado acepta JPEG) o cifrada con una clave que se pueda recuperar en otro dispositivo.
 
 ## 7.6 Almacenamiento seguro del sistema: Keystore y Keychain
 
@@ -113,6 +155,7 @@ Qué se guarda en este almacenamiento.
 | Token de acceso                   | Permite hacer solicitudes a Supabase en nombre del usuario      |
 | Token de renovación               | Permite obtener nuevos tokens de acceso sin pedir la contraseña |
 | Clave de cifrado de la base local | Sin ella, la base de datos del dispositivo es ilegible          |
+| Clave de las imágenes de recibos  | Sin ella, las fotos de recibos guardadas son ilegibles          |
 | Hash del PIN de la aplicación     | Permite verificar el PIN sin guardarlo en texto plano           |
 
 **Configuración adicional.** En iOS, los datos se configuran para que solo estén accesibles con el dispositivo desbloqueado y para que no se transfieran a otro dispositivo al restaurar una copia de seguridad. Así, los tokens y la clave de cifrado pertenecen a un dispositivo específico, y en un celular nuevo el usuario debe iniciar sesión de nuevo, como se describe en el escenario 6 de la sección 3.3.
@@ -171,6 +214,22 @@ Los sistemas operativos móviles protegen las capacidades sensibles del disposit
 | Estado de la red (ACCESS_NETWORK_STATE)                                                             | Android       | Detectar cambios de conectividad para sincronizar        | Se concede al instalar, sin diálogo para el usuario                                                                                                                   | No aplica.                                                                                                                                                                                  |
 
 En iOS, las claves NSCameraUsageDescription, NSPhotoLibraryUsageDescription y NSFaceIDUsageDescription se declaran en el archivo de configuración de la aplicación junto con un texto que el sistema muestra al pedir el permiso. Estos textos se redactan en español y explican el propósito concreto, por ejemplo: _"MisLukas usa la cámara para tomar la foto de tus recibos y leer el valor automáticamente. Las fotos no se comparten ni se guardan en tu galería."_ Apple revisa estos textos durante la publicación y puede rechazar una aplicación cuyas descripciones sean vagas.
+
+7.9.2.1 Implementación del permiso de cámara (Fase 6A)
+
+El permiso se maneja con permission_handler (versión 12.0.3, la última que compila contra el SDK 36 del proyecto), porque el paquete camera solo lo pide al iniciar la cámara y no indica si la negación es permanente ni abre los ajustes.
+
+| Estado del permiso | Qué ve el usuario |
+| --- | --- |
+| Concedido | La cámara, directamente. |
+| Sin pedir todavía | La explicación previa: "Permite el acceso a la cámara", con "Permitir cámara", "Elegir de la galería" y "Ahora no". "Ahora no" vuelve a Nuevo movimiento sin mostrar el diálogo del sistema. |
+| Negado | "No tenemos acceso a la cámara", con "Elegir de la galería", "Permitir cámara" (se puede volver a pedir) y "Registrar manual". |
+| Negado de forma permanente | "La cámara está desactivada para MisLukas", con los pasos (Ajustes › Aplicaciones › MisLukas › Permisos › Cámara), "Abrir Ajustes", "Elegir de la galería" y "Registrar manual". Al volver a la app se revisa el permiso otra vez. |
+| Bloqueado por el sistema | "La cámara no está disponible", con la galería y el registro manual. |
+
+En Android se quitan del manifiesto `RECORD_AUDIO` y `WRITE_EXTERNAL_STORAGE`, que agrega el plugin de CameraX, y `READ_EXTERNAL_STORAGE`, que el combinador de manifiestos agrega como implícito: MisLukas no graba audio ni guarda fotos fuera de su almacenamiento privado. La cámara se declara como no obligatoria (`android:required="false"`), porque sin ella la app sigue funcionando con la galería o el registro manual.
+
+**Pendiente para iOS (al compilar en macOS).** Los textos `NSCameraUsageDescription` y `NSPhotoLibraryUsageDescription` ya están en `Info.plist`. Falta lo que solo se puede hacer en el Mac: activar la macro `PERMISSION_CAMERA=1` de permission_handler en el `Podfile` y fijar el mínimo de iOS que pide ML Kit (15.5).
 
 7.9.3 Funcionalidades que no requieren permisos
 

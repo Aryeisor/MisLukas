@@ -47,7 +47,8 @@ La siguiente tabla relaciona cada riesgo del OWASP Mobile Top 10 con los control
 | Credenciales (contraseña)                               | Solo en el servidor, como hash                   | Crítico: acceso total a la cuenta                                    |
 | Tokens de sesión                                        | Keystore/Keychain                                | Crítico: suplantación del usuario sin conocer la contraseña          |
 | Clave de cifrado local                                  | Keystore/Keychain                                | Alto: permitiría leer la base del dispositivo                        |
-| Fotos de recibos                                        | Almacenamiento interno y, opcionalmente, Storage | Medio-alto: revelan lugares, horarios y medios de pago               |
+| Clave de las imágenes de recibos                        | Keystore/Keychain                                | Alto: permitiría leer las fotos de recibos del dispositivo           |
+| Fotos de recibos                                        | Almacenamiento interno (cifradas) y, opcionalmente, Storage | Medio-alto: revelan lugares, horarios y medios de pago    |
 | Datos de identificación (nombre y correo)               | Supabase Auth y tabla perfiles                   | Medio: permiten phishing dirigido al usuario                         |
 
 8.1.3 Amenazas consideradas
@@ -337,6 +338,7 @@ Como se explicó en 6.5 y 7.5:
 - Toda la base de datos local se cifra con SQLite3MultipleCiphers usando una clave aleatoria de 256 bits, generada en el dispositivo y guardada en el Keystore o el Keychain.
 - El archivo y las imágenes de recibos se excluyen de las copias de seguridad del sistema.
 - Si alguien extrae el archivo de la base, obtiene datos ilegibles. Para leerlos necesitaría la clave, y el sistema operativo solo se la entrega a MisLukas.
+- **Las imágenes de recibos también se guardan cifradas** (Fase 6A), con AES-256-GCM y una clave propia de 32 bytes, distinta de la de la base y guardada solo en el almacenamiento seguro. Cada imagen va ligada al id de su recibo (dato asociado) y lleva un nonce aleatorio. La imagen sin cifrar solo existe en la carpeta privada `recibos/tmp/` mientras corre el OCR, y se borra apenas termina, también si algo falla o el usuario cancela. Para mostrarla, se descifra en memoria; nunca se escribe descifrada en disco (docs/07 §7.5).
 
 8.8.2 Bloqueo biométrico o PIN
 
@@ -360,7 +362,7 @@ Al cerrar sesión, al eliminar la cuenta o al superar los intentos fallidos del 
 
 - La base de datos local.
 - Las imágenes de recibos.
-- La clave de cifrado.
+- La clave de cifrado de la base y la de las imágenes de recibos (se borran primero: sin ellas, lo que quede es ilegible).
 - Los tokens de sesión.
 - El hash del PIN.
 
@@ -452,10 +454,10 @@ Esta decisión también es de seguridad: si el servidor sufriera una filtración
 Las fotos de recibos requieren un manejo particular, porque contienen más información de la que la aplicación necesita: dirección del establecimiento, fecha y hora exacta de la compra y, a veces, los últimos dígitos de la tarjeta.
 
 - **Procesamiento local:** el OCR se ejecuta en el dispositivo; la imagen no se envía a ningún servicio externo para su lectura (7.3).
-- **Almacenamiento privado:** se guarda en el almacenamiento interno de la app, no en la galería del usuario.
+- **Almacenamiento privado y cifrado:** se guarda en el almacenamiento interno de la app, no en la galería del usuario, y cifrada con una clave que solo tiene este dispositivo (8.8.1). La imagen conserva todo el texto del recibo, que la aplicación descarta: cifrada, ese texto solo se puede leer con la clave del dispositivo.
 - **Respaldo opcional:** solo se sube a la nube si el usuario activa el respaldo, y en ese caso a un _bucket_ privado con acceso restringido por usuario y URLs firmadas temporales (8.5.5).
-- **Datos extraídos mínimos:** de todo el texto del recibo, solo se guardan el total y el nombre del comercio. El resto del texto reconocido se descarta.
-- **Eliminación:** el usuario puede eliminar la foto de un recibo sin eliminar el movimiento. Al eliminar la cuenta, se borran todas.
+- **Datos extraídos mínimos:** de todo el texto del recibo, solo se guardan el total y el nombre del comercio. El resto del texto reconocido se descarta en memoria (la fecha de la compra solo se usa para sugerir la del movimiento). Ni el texto, ni los montos, ni las rutas de los archivos se escriben en los registros.
+- **Eliminación:** el usuario puede eliminar la foto de un recibo sin eliminar el movimiento. Al eliminar un movimiento se borra su foto, y al eliminar la cuenta o cerrar sesión se borran todas, con su clave. *En la Fase 6A, eliminar solo la foto queda pendiente, junto con el respaldo en Storage (docs/07 §7.5).*
 
 8.9.4 Eliminación de cuenta desde la aplicación
 

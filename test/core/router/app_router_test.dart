@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mislukas/core/database/app_database.dart';
 import 'package:mislukas/core/widgets/widgets.dart';
 import 'package:mislukas/features/auth/presentation/login_screen.dart';
 import 'package:mislukas/features/auth/presentation/recover_password_screen.dart';
 import 'package:mislukas/features/home/presentation/home_screen.dart';
 import 'package:mislukas/features/movements/presentation/confirm_movement_screen.dart';
+import 'package:mislukas/features/movements/domain/repositories/receipt_capture_services.dart';
 import 'package:mislukas/features/movements/presentation/new_movement_screen.dart';
+import 'package:mislukas/features/movements/presentation/receipt/receipt_capture_screen.dart';
 import 'package:mislukas/features/profile/presentation/profile_screen.dart';
 import 'package:mislukas/features/reports/presentation/reports_screen.dart';
 import 'package:mislukas/features/simulator/presentation/simulator_screen.dart';
 
 import '../../helpers/fake_auth_repository.dart';
+import '../../helpers/fake_receipt_services.dart';
 import '../../helpers/pump_screen.dart';
 import '../../helpers/test_database.dart';
 
@@ -245,9 +249,18 @@ void main() {
   });
 
   testWidgetsWithDatabase(
-    'Continuar abre la confirmación con el método elegido',
+    'Continuar con foto abre la captura del recibo, sin barra inferior',
     (tester, db) async {
-      await pumpApp(tester, database: db);
+      // Sin permiso todavía: se ve la explicación previa, sin cámara.
+      await pumpApp(
+        tester,
+        database: db,
+        overrides: receiptServiceOverrides(
+          permission: FakeCameraPermission(
+            current: CameraPermissionStatus.denied,
+          ),
+        ),
+      );
       await loginAsDemoUser(tester);
 
       await tester.tap(find.text('Nuevo movimiento'));
@@ -255,8 +268,55 @@ void main() {
       await tester.tap(find.text('Continuar'));
       await tester.pumpAndSettle();
 
+      expect(find.byType(ReceiptCaptureScreen), findsOneWidget);
+      expect(find.text('Permite el acceso a la cámara'), findsOneWidget);
+      expect(find.byType(AppBottomNav), findsNothing);
+
+      // "Ahora no" vuelve a Nuevo movimiento.
+      await tester.tap(find.text('Ahora no'));
+      await tester.pumpAndSettle();
+      expect(find.byType(NewMovementScreen), findsOneWidget);
+    },
+  );
+
+  testWidgetsWithDatabase(
+    'un enlace a la confirmación por foto sin foto abre la captura',
+    (tester, db) async {
+      await pumpApp(
+        tester,
+        database: db,
+        overrides: receiptServiceOverrides(
+          permission: FakeCameraPermission(
+            current: CameraPermissionStatus.denied,
+          ),
+        ),
+      );
+      await loginAsDemoUser(tester);
+
+      GoRouter.of(tester.element(find.byType(HomeScreen)))
+          .go('/movements/confirm?method=photo');
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ReceiptCaptureScreen), findsOneWidget);
+      expect(find.byType(ConfirmMovementScreen), findsNothing);
+    },
+  );
+
+  testWidgetsWithDatabase(
+    'Continuar con registro manual abre Registra tu gasto',
+    (tester, db) async {
+      await pumpApp(tester, database: db);
+      await loginAsDemoUser(tester);
+
+      await tester.tap(find.text('Nuevo movimiento'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Registro manual'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continuar'));
+      await tester.pumpAndSettle();
+
       expect(find.byType(ConfirmMovementScreen), findsOneWidget);
-      expect(find.text('Confirma los datos'), findsOneWidget);
+      expect(find.text('Registra tu gasto'), findsOneWidget);
       expect(find.byType(AppBottomNav), findsNothing);
     },
   );

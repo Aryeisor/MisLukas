@@ -7,6 +7,7 @@ import 'core/sync/sync_controller.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/widgets/foreign_data_prompt.dart';
 import 'features/budgets/presentation/budget_carry_over_controller.dart';
+import 'features/movements/presentation/receipt/receipt_drafts.dart';
 import 'features/onboarding/presentation/welcome_launcher.dart';
 
 class MisLukasApp extends ConsumerWidget {
@@ -33,7 +34,8 @@ class MisLukasApp extends ConsumerWidget {
 
 /// Mantiene viva la sincronización mientras la app está abierta y sincroniza
 /// al volver a primer plano (docs/06 §6.6.2). También mantiene la continuidad
-/// de presupuestos, que corre después de cada sincronización (RF-53).
+/// de presupuestos, que corre después de cada sincronización (RF-53), y la
+/// limpieza de imágenes de recibos huérfanas, una vez por arranque.
 class SyncTriggers extends ConsumerStatefulWidget {
   const SyncTriggers({super.key, required this.child});
 
@@ -66,6 +68,7 @@ class _SyncTriggersState extends ConsumerState<SyncTriggers> {
     // reconstruyen la app.
     ref.listen(syncControllerProvider, (_, _) {});
     ref.listen(budgetCarryOverProvider, (_, _) {});
+    ref.listen(receiptCleanupProvider, (_, _) {});
     return widget.child;
   }
 }

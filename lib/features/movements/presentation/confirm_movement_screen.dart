@@ -10,8 +10,10 @@ import '../../../core/theme/category_style.dart';
 import '../../../core/utils/clock.dart';
 import '../../../core/utils/utils_providers.dart';
 import '../../../core/widgets/widgets.dart';
+import '../domain/entities/receipt_suggestion.dart';
+import '../domain/movement_text.dart';
 import 'confirm_movement_view_model.dart';
-import 'movement_entry_method.dart';
+import 'receipt/receipt_photo.dart';
 import 'widgets/income_form_fields.dart';
 import 'widgets/movement_date_field.dart';
 
@@ -24,8 +26,7 @@ class ConfirmMovementScreen extends ConsumerWidget {
 
   final ConfirmMovementMode mode;
 
-  bool get _isPhoto =>
-      mode == const CreateMovementMode(MovementEntryMethod.photo);
+  bool get _isPhoto => mode is CreatePhotoMovementMode;
 
   bool get _isEditing => mode is EditMovementMode;
 
@@ -138,7 +139,11 @@ class ConfirmMovementScreen extends ConsumerWidget {
     Widget header,
   ) {
     final viewModel = ref.read(confirmMovementViewModelProvider(mode).notifier);
-    final amountLabel = _isPhoto ? 'Valor detectado' : 'Valor del gasto';
+    final receipt = state.receipt;
+    final suggestion = receipt?.suggestion;
+    final amountLabel = suggestion?.total != null
+        ? 'Valor detectado'
+        : 'Valor del gasto';
 
     return Column(
       children: [
@@ -148,21 +153,13 @@ class ConfirmMovementScreen extends ConsumerWidget {
             children: [
               header,
               const SizedBox(height: AppSpacing.xl),
-              if (_isPhoto) ...[
-                const AppBanner(
-                  variant: AppBannerVariant.success,
-                  title: 'Recibo leído correctamente',
-                  description: 'Revisa y ajusta si necesitas.',
-                ),
+              if (receipt != null && suggestion != null) ...[
+                _ScanBanner(status: suggestion.status),
                 const SizedBox(height: AppSpacing.lg),
-                ReceiptPreview(
-                  merchant: demoReceiptHeader,
-                  taxId: demoReceiptTaxId,
-                  lines: [
-                    for (final (label, amount) in demoReceiptItems)
-                      ReceiptLine(label, amount),
-                  ],
-                  total: demoReceiptTotal,
+                ReceiptPhoto(
+                  localPath: receipt.localPath,
+                  receiptId: receipt.receiptId,
+                  detectedArea: suggestion.totalBox,
                 ),
                 const SizedBox(height: AppSpacing.lg),
               ],
@@ -185,12 +182,26 @@ class ConfirmMovementScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
+                if (_isPhoto) ...[
+                  AppCard(
+                    child: _TextField(
+                      label: 'Comercio',
+                      hint: 'Ej: Éxito',
+                      initialValue: state.merchant,
+                      onChanged: viewModel.setMerchant,
+                      action: TextInputAction.next,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 AppCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       AppFieldLabel(
-                        _isPhoto ? 'Categoría sugerida' : 'Categoría',
+                        suggestion?.category != null
+                            ? 'Categoría sugerida'
+                            : 'Categoría',
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       AppChipGroup<CategoryKind>(
@@ -213,7 +224,9 @@ class ConfirmMovementScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 AppCard(
-                  child: _NoteField(
+                  child: _TextField(
+                    label: 'Nota (opcional)',
+                    hint: 'Ej: mercado de la semana',
                     initialValue: state.note,
                     onChanged: viewModel.setNote,
                   ),
@@ -282,18 +295,57 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// Nota opcional, precargada al editar.
-class _NoteField extends StatefulWidget {
-  const _NoteField({required this.initialValue, required this.onChanged});
+/// Resultado de la lectura del recibo (docs/05 §5.5): verde si se leyó el
+/// total, amarillo si se leyó el recibo pero no el total y rojo si no se pudo
+/// leer. En los dos últimos, el usuario escribe el valor (RF-18).
+class _ScanBanner extends StatelessWidget {
+  const _ScanBanner({required this.status});
 
-  final String initialValue;
-  final ValueChanged<String> onChanged;
+  final ReceiptScanStatus status;
 
   @override
-  State<_NoteField> createState() => _NoteFieldState();
+  Widget build(BuildContext context) {
+    return switch (status) {
+      ReceiptScanStatus.complete => const AppBanner(
+        variant: AppBannerVariant.success,
+        title: 'Recibo leído correctamente',
+        description: 'Revisa y ajusta si necesitas.',
+      ),
+      ReceiptScanStatus.partial => const AppBanner(
+        variant: AppBannerVariant.warning,
+        title: 'No encontramos el total',
+        description: 'Escribe el valor del gasto.',
+      ),
+      ReceiptScanStatus.empty => const AppBanner(
+        variant: AppBannerVariant.error,
+        title: 'No pudimos leer el recibo',
+        description: 'Puedes ingresar el valor manualmente.',
+      ),
+    };
+  }
 }
 
-class _NoteFieldState extends State<_NoteField> {
+/// Campo de texto opcional (nota o comercio), precargado al abrir.
+class _TextField extends StatefulWidget {
+  const _TextField({
+    required this.label,
+    required this.hint,
+    required this.initialValue,
+    required this.onChanged,
+    this.action = TextInputAction.done,
+  });
+
+  final String label;
+  final String hint;
+  final String initialValue;
+  final ValueChanged<String> onChanged;
+  final TextInputAction action;
+
+  @override
+  State<_TextField> createState() => _TextFieldState();
+}
+
+class _TextFieldState extends State<_TextField> {
   late final TextEditingController _controller = TextEditingController(
     text: widget.initialValue,
   );
@@ -307,11 +359,11 @@ class _NoteFieldState extends State<_NoteField> {
   @override
   Widget build(BuildContext context) {
     return AppTextField(
-      label: 'Nota (opcional)',
-      hint: 'Ej: mercado de la semana',
+      label: widget.label,
+      hint: widget.hint,
       controller: _controller,
-      maxLength: movementNoteMaxLength,
-      textInputAction: TextInputAction.done,
+      maxLength: movementTextMaxLength,
+      textInputAction: widget.action,
       onChanged: widget.onChanged,
     );
   }

@@ -236,6 +236,14 @@ _Figura 5.7. Captura de la variante de registro manual_
 - Campo **NOTA (OPCIONAL)**.
 - Botón "Guardar gasto" con un ícono de documento.
 
+**Implementación con la foto real (Fase 6A).** La pantalla se llena con lo que leyó el OCR (docs/07 §7.3) y difiere del boceto en tres puntos:
+
+- **Vista previa.** Muestra la foto del recibo, descifrada en memoria, sobre el fondo oscuro, con un recuadro azul y la etiqueta "Área detectada" sobre la fila del total. Ya no muestra el NIT ni los productos: la app descarta ese texto (docs/08 §8.9.3). Si el recibo no tiene foto en este celular, muestra "La foto solo está en el celular donde se tomó"; si no se puede descifrar, "No pudimos mostrar la foto del recibo".
+- **Banner según la lectura.** Verde "Recibo leído correctamente" si se encontró el total; amarillo "No encontramos el total. Escribe el valor del gasto." si se leyó el recibo, pero no el total; rojo "No pudimos leer el recibo. Puedes ingresar el valor manualmente." si no se leyó nada. Sin total, el campo se llama VALOR DEL GASTO y aparece vacío; sin categoría sugerida, la sección se llama CATEGORÍA y no trae ninguna marcada.
+- **Campo COMERCIO**, debajo del valor, precargado con el comercio detectado y editable. Se guarda como descripción del movimiento; vacío, se usa el nombre de la categoría. El boceto no lo tiene, pero sin él el usuario no podría corregir el comercio.
+
+Antes de esta pantalla está la captura: el visor de cámara con el marco, la linterna y el acceso a la galería, la revisión de la foto ("Usar foto" / "Repetir") y "Leyendo tu recibo…" mientras corre el OCR. Si no hay permiso de cámara, la captura muestra la explicación previa o cómo habilitarlo, con la galería y el registro manual como alternativas (docs/07 §7.9).
+
 **Variante de registro manual.** Conserva la misma estructura, pero sin el banner ni la vista previa del recibo. El campo cambia a **VALOR DEL GASTO** y aparece vacío, listo para escribir. La fecha también está, con hoy por defecto.
 
 **Edición de un gasto.** Se abre "Editar movimiento" con el valor, la categoría, la fecha y la nota del gasto, y los botones "Guardar cambios" y "Eliminar movimiento". Cambiar la fecha pasa el gasto al mes de la nueva fecha.

@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../security/database_key_store.dart';
 import '../security/device_session_store.dart';
+import '../security/receipt_key_store.dart';
 import 'database_connection.dart';
 import 'database_providers.dart';
 
@@ -16,12 +17,12 @@ abstract interface class LocalDataWiper {
   Future<void> wipe();
 }
 
-/// Borra la clave de cifrado y el dueño, y luego cierra la base y borra su
-/// archivo y las imágenes de recibos. La próxima base se abre con una clave
-/// nueva.
+/// Borra las claves de cifrado (de la base y de las imágenes de recibos) y el
+/// dueño, y luego cierra la base y borra su archivo y las imágenes de
+/// recibos. La próxima base y las próximas imágenes usan claves nuevas.
 ///
-/// La clave y el dueño van primero porque deciden de quién son los datos: sin
-/// la clave, lo que quede del archivo no se puede leer (se descarta al abrir la
+/// Las claves y el dueño van primero porque deciden de quién son los datos:
+/// sin las claves, lo que quede de la base o de las imágenes no se puede leer (se descarta al abrir la
 /// base nueva, [deleteStaleDatabase]) y, sin dueño, la próxima cuenta entra sin
 /// aviso. Solo falla si no se pueden borrar esos dos. Cerrar la base y borrar
 /// archivos no bloquea: tienen tiempo máximo y sus errores se ignoran.
@@ -30,6 +31,7 @@ class FileLocalDataWiper implements LocalDataWiper {
     required this._closeDatabase,
     required this._directory,
     required this._keyStore,
+    required this._receiptKeyStore,
     required this._sessionStore,
     required this._onWiped,
   });
@@ -37,6 +39,7 @@ class FileLocalDataWiper implements LocalDataWiper {
   final Future<void> Function() _closeDatabase;
   final Future<Directory> Function() _directory;
   final DatabaseKeyStore _keyStore;
+  final ReceiptKeyStore _receiptKeyStore;
   final DeviceSessionStore _sessionStore;
 
   /// Libera la base cerrada para que el próximo uso abra una nueva.
@@ -51,6 +54,7 @@ class FileLocalDataWiper implements LocalDataWiper {
   @override
   Future<void> wipe() async {
     await _keyStore.deleteKey();
+    await _receiptKeyStore.deleteKey();
     await _sessionStore.clearOwner();
 
     try {
@@ -80,6 +84,7 @@ final localDataWiperProvider = Provider<LocalDataWiper>(
     closeDatabase: () => ref.read(appDatabaseProvider).close(),
     directory: getApplicationSupportDirectory,
     keyStore: ref.read(databaseKeyStoreProvider),
+    receiptKeyStore: ref.read(receiptKeyStoreProvider),
     sessionStore: ref.read(deviceSessionStoreProvider),
     onWiped: () => ref.invalidate(appDatabaseProvider),
   ),

@@ -1,4 +1,31 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Foto del recibo (docs/07 §7.9). El permiso se pide al usarla. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- La app funciona sin cámara (galería o registro manual): no se exige
+         en la tienda. camera_android_camerax la declara obligatoria. -->
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false"
+        tools:replace="android:required" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+    <!-- camera_android_camerax los declara para grabar video y guardar en la
+         galería; MisLukas no usa el micrófono ni guarda fotos fuera de su
+         almacenamiento privado (docs/07 §7.1, §7.9.1). -->
+    <uses-permission
+        android:name="android.permission.RECORD_AUDIO"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        tools:node="remove" />
+    <!-- El combinador de manifiestos lo agrega como implícito de
+         WRITE_EXTERNAL_STORAGE. La galería usa el selector del sistema, que
+         no necesita permiso (docs/07 §7.2). -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        tools:node="remove" />
     <application
         android:label="MisLukas"
         android:name="${applicationName}"

@@ -20,6 +20,7 @@ La documentación técnica completa está en `docs/`. Es la **fuente de verdad**
 | `docs/06-arquitectura.md` | Stack, capas, modelo de datos, almacenamiento, sincronización, Supabase |
 | `docs/07-funciones-dispositivo.md` | Cámara, OCR, notificaciones, biometría, permisos |
 | `docs/08-seguridad.md` | Autenticación, RLS, inyección SQL, protección local, Ley 1581 |
+| `docs/09-pruebas.md` | Evidencias: verify.sql, pruebas automáticas, pruebas manuales, mediciones y capturas pendientes |
 
 Si el código que vas a escribir contradice la documentación, **no lo resuelvas por tu cuenta**: avísame y explica la diferencia.
 
@@ -122,6 +123,24 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
   - Si dos celulares copian el mismo mes sin conexión, la resolución de "único entre activos" de la 5C deja uno por categoría; las copias perdedoras quedan como lápidas y no se vuelve a copiar.
   - Las alertas no cambian: se evalúan con los presupuestos y gastos de cada mes, así que el mes nuevo empieza sin alertas.
 - Fecha del gasto (5E, RF-19): `MovementDateField` (`movements/presentation/widgets/`) es el selector de fecha del ingreso y del gasto (AppFieldLabel + AppSecondaryButton + `showDatePicker` con `lastDate` = hoy). El gasto (foto, manual y edición) empieza con hoy (`ConfirmMovementState.date`) y se guarda con `RegisterMovement`/`UpdateMovement(date)`. Disponible, Reportes, alertas y simulador ya filtran por `fecha`. En Supabase no hay check de fecha futura (tampoco para el ingreso de la 5D): la validación es solo del cliente.
+- Foto del recibo (6A, RF-14 a RF-18):
+  - Visor propio con `camera` (docs/07 §7.1) en `/movements/new/receipt` (`ReceiptCaptureScreen`, `movements/presentation/receipt/`). Galería con `image_picker`, sin "Usar foto" / "Repetir". "Continuar" con foto abre la captura; al terminar, `pushReplacement` a `/movements/confirm` con `ReceiptCapture` en `extra`. Sin `extra`, `?method=photo` redirige a la captura y sin `method` es el registro manual.
+  - Calidad en `receipt_capture_settings.dart`: cámara `ResolutionPreset.veryHigh` (1080p), JPEG, `enableAudio: false`; galería 1920 px, calidad 85, `requestFullMetadata: false`. Sin paquete de compresión. Más de 5 MB → "La imagen es muy grande".
+  - Permiso con `permission_handler` (`CameraPermissionService`): explicación previa, negado, negado permanente (Ajustes; se revisa de nuevo al volver a primer plano) y bloqueado. Siempre se ofrece galería o registro manual.
+  - OCR con `google_mlkit_text_recognition` (latino, modelo incluido) detrás de `ReceiptTextReader`. `ReceiptParser` (`movements/domain/receipt/`, Dart puro) agrupa las líneas en filas por su ubicación y extrae total (palabras clave con prioridad y exclusiones; con empate, la fila más abajo), comercio (diccionario `merchant_dictionary.dart` o primera fila válida), fecha (día antes que mes; futura, inválida o anterior a 2000 → hoy) y categoría (RF-16).
+  - Sin palabra clave de total, el valor queda vacío: no se propone el número más alto (se quitó de docs/07).
+  - `ScanReceipt` nunca falla: un error del OCR es `ReceiptScanStatus.empty`. Estados: `complete` (hay total, banner verde), `partial` (texto sin total, amarillo) y `empty` (rojo).
+  - `ConfirmMovementMode`: `CreateManualMovementMode` y `CreatePhotoMovementMode(ReceiptCapture)` (reemplazan a `CreateMovementMode(method)`). En la variante foto hay un campo COMERCIO (no está en el boceto 5.6) que se guarda como descripción. `ReceiptDraft` lleva el `id` del recibo (el de su archivo); `total_detectado` y `comercio_detectado` guardan lo leído, aunque el usuario lo corrija.
+- Imágenes de recibos cifradas (6A, docs/07 §7.5):
+  - AES-256-GCM con `cryptography` + `cryptography_flutter` (nativo: javax.crypto / CryptoKit; se registra solo, sin `enable()`). Clave propia de 32 bytes en `ReceiptKeyStore` (`core/security/`, `mislukas.receipt_key`), distinta de la de la base; creación idempotente y serializada. El wiper la borra junto con la de la base.
+  - `FileReceiptImageStore`: `recibos/tmp/<id>.<ext>` sin cifrar solo mientras corre el OCR; `recibos/<id>.enc` = nonce (12) ‖ cifrado ‖ MAC (16), con el id del recibo como dato asociado y escritura atómica. `ruta_local` es relativa (`recibos/<id>.enc`). El temporal se borra en un `finally`, al repetir, al salir y si algo falla. Solo cifra o borra archivos dentro de `recibos/tmp/`.
+  - La vista previa descifra en memoria (`receiptImageProvider`, nunca lanza) y usa `Image.memory`. `ReceiptImage`: `available`, `notOnDevice` ("La foto solo está en el celular donde se tomó") o `unreadable` ("No pudimos mostrar la foto del recibo").
+  - `receiptDraftsInProgressProvider` registra el recibo desde la foto hasta que se guarda o se descarta. `ReceiptCleanupController` (en `SyncTriggers`) corre `CleanReceiptImages` una sola vez por arranque, cuando la sesión queda `ready`, sin tocar los recibos en curso; también limpia lo que la cámara (`CAP*.jpg`) y image_picker (`scaled_*`, `<uuid>/`) dejan en la caché. Salir de Confirma los datos sin guardar borra el `.enc`; eliminar un movimiento borra su imagen.
+  - "Medir cifrado de recibos" (`ReceiptCipherBenchmarkAction`, `core/widgets/dev/`) se muestra en el Perfil con `!kReleaseMode` (también en `--profile`); el criterio es ≤ 300 ms entre cifrar y descifrar 1 MB.
+  - Medición en el Galaxy J4 (armeabi-v7a, `--profile`, mediana de 10 corridas con 1 MB): cifrar 48 ms, descifrar 54 ms, total 102 ms. El OCR no mostró retardo perceptible, así que se mantiene 1080p. Evidencias de pruebas en `docs/09-pruebas.md`.
+  - `ReceiptParser` evalúa palabras clave, exclusiones y fechas por línea de ML Kit (`ReceiptRow.lines`, `ReceiptLine`), no por fila visual: el texto de otro papel a la misma altura no descarta la fila ni aporta su monto. El visor dice "Ubica el recibo dentro del marco, sobre una superficie lisa y sin otros papeles" (`ReceiptFrameHint`).
+  - Respaldo en Storage pendiente: `ruta_storage` sigue en null, la foto solo vive en el celular donde se tomó. Eliminar solo la foto (docs/08 §8.9.3) también queda pendiente.
+- Android (6A): el manifiesto declara `CAMERA`, la cámara como no obligatoria (`camera.any` con `tools:replace`) y quita `RECORD_AUDIO` y `WRITE_EXTERNAL_STORAGE`, que agrega `camera_android_camerax`, y `READ_EXTERNAL_STORAGE`, que el combinador agrega como implícito. `android/app/proguard-rules.pro` tiene los `-dontwarn` de los reconocedores de ML Kit de otros alfabetos, sin los que R8 falla. iOS: `NSCameraUsageDescription` y `NSPhotoLibraryUsageDescription` en `Info.plist`; quedan para el Mac la macro `PERMISSION_CAMERA=1` en el Podfile y el mínimo de iOS 15.5 de ML Kit.
 - Fecha simulada solo en desarrollo: `clockProvider` usa `MonthShiftedClock` si `debugMonthOffsetProvider` es distinto de 0 y `kDebugMode`. Lo controlan "Adelantar un mes" y "Volver a la fecha real" en `DemoDataActions`; el desfase vive en memoria. Mientras está adelantada, todo lo que se guarda lleva fechas y `actualizado_en` futuros (que ganarían conflictos reales): solo se usa con una cuenta de prueba que se elimina al final.
 
 ## Stack
@@ -134,7 +153,7 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - **uuid**, **path_provider** y **flutter_secure_storage**: ya incorporadas en la Fase 4 (identificadores, ubicación de la base y clave de cifrado).
 - **Supabase** (`supabase_flutter`, incorporado en la Fase 5A): Auth, PostgreSQL con Row Level Security y Storage (Fase 5).
 - **flutter_localizations** (del SDK, incorporado en la Fase 5D): textos del sistema en español (calendario).
-- **Paquetes del dispositivo** (Fase 6): `camera`, `image_picker`, `google_mlkit_text_recognition`, `flutter_local_notifications`, `local_auth`, `connectivity_plus`.
+- **Paquetes del dispositivo** (Fase 6): `camera`, `image_picker`, `google_mlkit_text_recognition`, `flutter_local_notifications`, `local_auth`, `connectivity_plus`. En la 6A se incorporaron `camera`, `image_picker` y `google_mlkit_text_recognition`, más `permission_handler` (permiso de cámara) y `cryptography` + `cryptography_flutter` (cifrado de las imágenes), aprobados aparte. Las versiones de la Fase 6 van fijas en pubspec.yaml (sin `^`). `permission_handler` va en 12.0.3: las 13.x traen `permission_handler_android` 14.x, que exige compileSdk 37, y el AGP 9.1 del proyecto recomienda como máximo 36.
 
 No agregues dependencias de una fase futura ni paquetes fuera de esta lista sin consultarme.
 
@@ -204,7 +223,7 @@ En `lib/core/widgets/`. Importar siempre desde `package:mislukas/core/widgets/wi
 - `AppCheckboxTile`: casilla con texto que puede incluir enlaces (`AppTextSegment`).
 - `AppPasswordStrength`: barra de fortaleza (Débil/Media/Fuerte) y lista de requisitos de contraseña.
 - `AppCodeField`: código de verificación de 6 dígitos en casillas, solo números, con autocompletado del código y error.
-- `ReceiptPreview`: vista previa de un recibo con el total resaltado como "Área detectada".
+- `ReceiptPreview`: foto del recibo sobre fondo oscuro con el total resaltado como "Área detectada" (`ReceiptPreview.image(bytes, detectedArea:)`), mientras carga (`.loading()`) o sin foto (`.unavailable(notOnDevice | unreadable)`). La imagen llega en memoria; en la galería se dibuja una de muestra.
 - `AppCard`: tarjeta blanca con borde sutil y `onTap` opcional.
 - `AppSectionHeader`: título de sección con acción opcional a la derecha ("Ver todos").
 - `CategoryIcon`: ícono de categoría (`CategoryKind`) en un cuadrado con fondo pastel.

@@ -101,6 +101,23 @@ class FakeMovementRepository implements MovementRepository {
   Future<List<Movement>> getBetween(DateTime from, DateTime to) async =>
       _between(from, to);
 
+  @override
+  Future<Receipt?> findReceipt(String movementId) async {
+    final movement = _items[movementId];
+    if (movement == null || movement.isDeleted) return null;
+    return receipts.values
+        .where((receipt) => receipt.movementId == movementId)
+        .firstOrNull;
+  }
+
+  @override
+  Future<Set<String>> activeReceiptPaths() async => {
+    for (final receipt in receipts.values)
+      if (receipt.localPath != null &&
+          !(_items[receipt.movementId]?.isDeleted ?? true))
+        receipt.localPath!,
+  };
+
   List<Movement> _between(DateTime from, DateTime to) => _active
       .where((m) => !m.date.isBefore(from) && m.date.isBefore(to))
       .toList();

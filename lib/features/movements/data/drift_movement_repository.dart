@@ -181,6 +181,27 @@ class DriftMovementRepository implements MovementRepository {
     );
   }
 
+  @override
+  Future<Receipt?> findReceipt(String movementId) async {
+    final row =
+        await (_db.select(_db.receipts)..where(
+              (t) => t.movementId.equals(movementId) & t.deletedAt.isNull(),
+            ))
+            .getSingleOrNull();
+    return row?.toEntity();
+  }
+
+  @override
+  Future<Set<String>> activeReceiptPaths() async {
+    final query = _db.selectOnly(_db.receipts)
+      ..addColumns([_db.receipts.localPath])
+      ..where(
+        _db.receipts.deletedAt.isNull() & _db.receipts.localPath.isNotNull(),
+      );
+    final rows = await query.get();
+    return {for (final row in rows) row.read(_db.receipts.localPath)!};
+  }
+
   /// Fecha en [from, to). Las fechas son texto 'AAAA-MM-DD', que se comparan
   /// en orden; los valores viajan como parámetros.
   SimpleSelectStatement<$MovementsTable, MovementRow> _between(
