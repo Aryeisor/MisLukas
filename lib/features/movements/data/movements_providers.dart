@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/database/database_providers.dart';
+import '../../../core/security/external_activity_tracker.dart';
 import '../../../core/utils/utils_providers.dart';
 import '../../budgets/data/budgets_providers.dart';
 import '../domain/repositories/movement_repository.dart';
@@ -103,11 +104,13 @@ final receiptTextReaderProvider = Provider<ReceiptTextReader>((ref) {
 });
 
 final cameraPermissionProvider = Provider<CameraPermissionService>(
-  (ref) => const PermissionHandlerCameraPermission(),
+  (ref) => PermissionHandlerCameraPermission(
+    ref.read(externalActivityTrackerProvider),
+  ),
 );
 
 final receiptImagePickerProvider = Provider<ReceiptImagePicker>(
-  (ref) => ImagePickerReceiptPicker(),
+  (ref) => ImagePickerReceiptPicker(ref.read(externalActivityTrackerProvider)),
 );
 
 final scanReceiptProvider = Provider<ScanReceipt>(

@@ -18,6 +18,10 @@ abstract final class AppRoutes {
   /// Eliminar la cuenta (RF-48), a pantalla completa.
   static const String deleteAccount = '/profile/delete-account';
 
+  /// Activar el bloqueo con el bloqueo del celular (RF-46), a pantalla
+  /// completa. Se abre desde Perfil.
+  static const String appLock = '/profile/app-lock';
+
   /// Presupuestos del mes (RF-52), a pantalla completa. Se abre desde Perfil.
   static const String budgets = '/profile/budgets';
 

@@ -7,17 +7,17 @@ import '../../../core/notifications/local_notifications.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/router/app_routes.dart';
 import '../../auth/presentation/account_session_controller.dart';
+import '../../auth/presentation/app_lock/app_lock_controller.dart';
 
 /// Abre Presupuestos al tocar una notificación de alerta, con la app abierta o
 /// cerrada. Se monta una sola vez, encima del router (MaterialApp.router
 /// builder), y usa push como la bienvenida: al volver, el usuario sigue donde
 /// estaba.
 ///
-/// Espera a que la sesión esté lista; sin sesión, el toque se descarta. Solo
-/// acepta la ruta de Presupuestos, aunque el payload diga otra cosa.
-///
-/// 6C: cuando exista el desbloqueo con PIN o biometría, este camino debe pasar
-/// primero por él, igual que abrir la app.
+/// Espera a que la sesión esté lista y, si la app está bloqueada, a que el
+/// usuario la desbloquee (docs/08 §8.8.3.1); sin sesión, el toque se
+/// descarta. Solo acepta la ruta de Presupuestos, aunque el payload diga otra
+/// cosa.
 class NotificationTapLauncher extends ConsumerStatefulWidget {
   const NotificationTapLauncher({super.key, required this.child});
 
@@ -62,7 +62,10 @@ class _NotificationTapLauncherState
       _pending = null;
       return;
     }
-    if (status != AccountSessionStatus.ready) return;
+    if (status != AccountSessionStatus.ready ||
+        !ref.read(appLockProvider).contentVisible) {
+      return;
+    }
     _pending = null;
     ref.read(appRouterProvider).push(route);
   }
@@ -70,6 +73,10 @@ class _NotificationTapLauncherState
   @override
   Widget build(BuildContext context) {
     ref.listen(accountSessionProvider, (_, _) => _openIfReady());
+    ref.listen(
+      appLockProvider.select((s) => s.contentVisible),
+      (_, _) => _openIfReady(),
+    );
     return widget.child;
   }
 }

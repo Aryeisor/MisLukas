@@ -19,6 +19,10 @@ const String commonPasswordMessage =
 const String passwordTooLongMessage =
     'La contraseña no puede tener más de 72 caracteres.';
 
+/// La sesión guardada ya no sirve: se entra con correo y contraseña.
+const String sessionExpiredMessage =
+    'Tu sesión expiró. Ingresa con tu correo y contraseña.';
+
 /// Mensaje para [failure].
 String authMessageFor(AuthFailure failure) {
   return switch (failure) {
@@ -35,6 +39,7 @@ String authMessageFor(AuthFailure failure) {
       'Demasiados intentos. Espera unos minutos e intenta de nuevo.',
     AuthFailure.network =>
       'Sin conexión a internet. Revisa tu conexión e intenta de nuevo.',
+    AuthFailure.sessionExpired => sessionExpiredMessage,
     AuthFailure.unknown => 'Algo salió mal. Intenta de nuevo en un momento.',
   };
 }

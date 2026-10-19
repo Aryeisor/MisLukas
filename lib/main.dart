@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
 import 'core/config/env.dart';
 import 'core/notifications/local_notifications.dart';
+import 'core/security/app_lock_store.dart';
 import 'core/security/device_session_store.dart';
 import 'core/security/secure_auth_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
@@ -39,6 +40,16 @@ Future<void> main() async {
   );
   // Dueño de la base local, para decidir la pantalla inicial sin esperar.
   final owner = await sessionStore.readOwner().catchError((Object _) => null);
+  // Sesión en espera del bloqueo del celular: se abre el login. Si no se puede
+  // leer la marca, se trata la sesión actual como en espera (falla cerrada:
+  // se entra con el bloqueo del celular o la contraseña).
+  final parkedUser = await sessionStore.readParkedUser().catchError(
+    (Object _) => Supabase.instance.client.auth.currentUser?.id,
+  );
+  // Bloqueo con el bloqueo del celular: se decide antes de mostrar nada.
+  final appLockEnabled = await const SecureAppLockStore()
+      .readEnabled()
+      .catchError((Object _) => false);
 
   // Antes de runApp para saber si una notificación abrió la app. No pide el
   // permiso: se pide al crear el primer presupuesto (docs/07 §7.9).
@@ -49,6 +60,8 @@ Future<void> main() async {
     ProviderScope(
       overrides: [
         initialLocalOwnerProvider.overrideWithValue(owner),
+        initialParkedUserProvider.overrideWithValue(parkedUser),
+        initialAppLockEnabledProvider.overrideWithValue(appLockEnabled),
         localNotificationsProvider.overrideWithValue(notifications),
       ],
       child: const MisLukasApp(),

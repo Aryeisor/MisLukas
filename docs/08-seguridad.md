@@ -37,7 +37,7 @@ La siguiente tabla relaciona cada riesgo del OWASP Mobile Top 10 con los control
 | M7. Protección insuficiente del binario             | Ofuscación del código compilado; detección de root/jailbreak a futuro                       | 8.8.5, 8.11 |
 | M8. Configuración de seguridad incorrecta           | Exclusión de copias de seguridad, entornos separados, revisión de configuración de Supabase | 8.8, 9.4    |
 | M9. Almacenamiento de datos inseguro                | Base local cifrada, Keystore/Keychain, borrado al cerrar sesión                             | 8.8         |
-| M10. Criptografía insuficiente                      | SQLite3MultipleCiphers con clave de 256 bits, hash de contraseñas y PIN                     | 8.2, 8.8    |
+| M10. Criptografía insuficiente                      | SQLite3MultipleCiphers con clave de 256 bits y hash de contraseñas en el servidor           | 8.2, 8.8    |
 
 8.1.2 Activos a proteger
 
@@ -54,7 +54,7 @@ La siguiente tabla relaciona cada riesgo del OWASP Mobile Top 10 con los control
 8.1.3 Amenazas consideradas
 
 **Robo o pérdida del celular.** Es la amenaza más probable para una aplicación móvil. Quien tenga el dispositivo podría intentar abrir la aplicación o extraer sus archivos.  
-_Controles:_ desbloqueo biométrico o PIN, bloqueo automático, base de datos cifrada y tokens en almacenamiento seguro (8.8).
+_Controles:_ desbloqueo con el bloqueo del celular, bloqueo automático, base de datos cifrada y tokens en almacenamiento seguro (8.8).
 
 **Ataques de fuerza bruta y relleno de credenciales.** Consisten en probar muchas contraseñas contra una cuenta, o probar combinaciones de correo y contraseña filtradas de otros sitios (_credential stuffing_), aprovechando que muchas personas reutilizan sus contraseñas.  
 _Controles:_ límites de intentos por IP y por cuenta, CAPTCHA y política de contraseñas (8.2).
@@ -141,11 +141,12 @@ Ambos tokens se guardan **exclusivamente** en el almacenamiento seguro del siste
 
 8.2.6 Cierre de sesión por inactividad
 
-MisLukas distingue dos niveles de "cierre":
+MisLukas distingue tres niveles de "cierre":
 
-- **Bloqueo local por inactividad.** Si la app pasa más de cinco minutos en segundo plano, se bloquea y exige biometría o PIN para volver a mostrar información (RNF-08). La sesión con el servidor sigue activa, así que el usuario no tiene que volver a escribir su contraseña.
-- **Cierre de sesión completo.** Ocurre cuando el usuario lo solicita, cuando falla cinco veces el PIN, cuando se cambia la contraseña desde otro dispositivo o cuando la sesión se revoca en el servidor. En todos los casos se eliminan los tokens y para volver a entrar se necesita el correo y la contraseña.
-  - Si lo pide el usuario o falla cinco veces el PIN, también se eliminan la base local, las imágenes y la clave de cifrado del dispositivo (8.8.4).
+- **Bloqueo local por inactividad.** Si la app pasa más de cinco minutos en segundo plano, se bloquea y exige el bloqueo del celular (huella, rostro o el PIN del sistema) para volver a mostrar información (RNF-08). La sesión con el servidor sigue activa, así que el usuario no tiene que volver a escribir su contraseña.
+- **Cierre de sesión que conserva la sesión** (Fase 6C, con "Ingresar con huella, rostro o PIN" activo). "Cerrar sesión" vuelve al inicio de sesión sin revocar la sesión en Supabase ni borrar la base, sus claves ni los recibos. La sesión queda en el almacenamiento seguro, marcada como en espera, y solo se reutiliza después del diálogo del sistema o de la contraseña (docs/07 §7.7). Los cambios sin sincronizar no se pierden.
+- **Cierre de sesión completo.** Ocurre cuando el usuario lo solicita sin ese ajuste, o elige "Cerrar sesión y borrar los datos de este celular" (también desde la pantalla de desbloqueo), cuando se cambia la contraseña desde otro dispositivo o cuando la sesión se revoca en el servidor. En todos los casos se eliminan los tokens y para volver a entrar se necesita el correo y la contraseña.
+  - Si lo pide el usuario, también se eliminan la base local, las imágenes y la clave de cifrado del dispositivo (8.8.4).
   - Si la sesión se cierra sin que el usuario lo pida (revocada en el servidor o contraseña cambiada en otro dispositivo), la base local se conserva cifrada para no perder los cambios pendientes (6.6.4). La app guarda en el almacenamiento seguro qué usuario es el dueño de esos datos. Mientras no haya sesión, no se muestran. Si vuelve a entrar el mismo usuario, se envían; si entra otro, se le avisa y se borran antes de abrir la base.
 
 ## 8.3 Registro
@@ -340,21 +341,36 @@ Como se explicó en 6.5 y 7.5:
 - Si alguien extrae el archivo de la base, obtiene datos ilegibles. Para leerlos necesitaría la clave, y el sistema operativo solo se la entrega a MisLukas.
 - **Las imágenes de recibos también se guardan cifradas** (Fase 6A), con AES-256-GCM y una clave propia de 32 bytes, distinta de la de la base y guardada solo en el almacenamiento seguro. Cada imagen va ligada al id de su recibo (dato asociado) y lleva un nonce aleatorio. La imagen sin cifrar solo existe en la carpeta privada `recibos/tmp/` mientras corre el OCR, y se borra apenas termina, también si algo falla o el usuario cancela. Para mostrarla, se descifra en memoria; nunca se escribe descifrada en disco (docs/07 §7.5).
 
-8.8.2 Bloqueo biométrico o PIN
+8.8.2 Ingresar con huella, rostro o PIN (bloqueo del celular)
 
-El acceso a la información requiere biometría o el PIN de la aplicación cada vez que se abre y después de cinco minutos en segundo plano (7.7):
+Si el usuario activa "Ingresar con huella, rostro o PIN", el acceso a la información requiere el bloqueo del propio celular (huella, rostro o el PIN, patrón o contraseña del sistema) cada vez que se abre la app, después de cinco minutos en segundo plano y para volver a entrar desde el inicio de sesión con la sesión guardada (7.7):
 
-- El PIN se guarda como hash con _salt_ en el almacenamiento seguro, nunca en texto plano.
-- Después de cinco intentos fallidos, la aplicación cierra la sesión completa y exige correo y contraseña, lo que traslada el control al servidor y a sus límites de intentos.
+- **No hay PIN propio de la aplicación** (Fase 6C). La app no guarda ningún PIN ni hash; solo recibe del sistema si la verificación fue exitosa.
+- **Los intentos fallidos los controla el sistema operativo**, que pausa el desbloqueo por un tiempo. Se eliminó el requisito anterior de cerrar la sesión y borrar los datos tras cinco intentos fallidos de un PIN propio. Si el usuario no puede desbloquear, la pantalla de desbloqueo ofrece "¿No eres tú? Cerrar sesión", con la opción de borrar los datos locales (8.8.4).
+- **Activarlo desde el perfil pide la contraseña de la cuenta**, verificada con el servidor, para que quien encuentre el celular desbloqueado con la app abierta no pueda cambiar la protección. Desactivarlo pide el bloqueo del celular.
+- El tiempo en segundo plano se mide con el reloj monotónico y con la hora del sistema; atrasar la hora del celular bloquea la app en lugar de evitar el bloqueo.
+- No hay ningún atajo para saltar el bloqueo, tampoco en las versiones de desarrollo.
+- **Al volver a entrar desde el login, la sesión guardada se renueva con el servidor** después del diálogo. Si fue revocada (contraseña cambiada en otro celular, cuenta eliminada), se pide la contraseña.
+
+**Limitación del MVP: es una puerta de la app.** El refresh token de la sesión guardada está en `flutter_secure_storage`, cifrado por el Keystore (Android) o el Keychain (iOS), pero **sin exigir autenticación para leerlo**: es el código de la app el que exige el diálogo del sistema antes de usarlo. Protege contra quien toma el celular desbloqueado y abre la app. No protege contra quien ejecute código con los permisos de la app: un celular con root, una extracción forense o un fallo de la app que saltara la puerta. Es el mismo nivel que ya tenía el bloqueo al reabrir, porque con el ajuste activo la sesión ya estaba guardada así. Además, mientras está en espera la sesión sigue válida en el servidor: los refresh tokens de Supabase no vencen por defecto, y el tiempo máximo de inactividad o de sesión (inactivity timeout, time-box) está en planes de pago.
+
+**Trabajo futuro: atar la sesión a una clave que exija autenticación.**
+
+- **Android:** clave AES del Keystore con `setUserAuthenticationRequired(true)` que solo descifra el refresh token dentro de un `BiometricPrompt` con `CryptoObject`.
+- **iOS:** ítem del Keychain con `SecAccessControl(.userPresence)`.
+- **Paquete:** `biometric_storage`, que hace las dos cosas; `flutter_secure_storage` no ofrece autenticación obligatoria en Android.
+- Haría falta un `LocalStorage` propio para gotrue que, al dejar la sesión en espera, la mueva al almacén protegido y la quite de la memoria, y que la restaure con `recoverSession` después del diálogo.
+- En Android 10 o anterior (por ejemplo, el Galaxy J4 con Android 9), un `CryptoObject` no admite el PIN del celular, solo biometría fuerte.
+- Para que tenga sentido habría que atar también la clave de la base local, que hoy tampoco exige autenticación.
 
 8.8.3 Ocultar información en la vista de aplicaciones recientes
 
-Cuando el usuario cambia de aplicación, el sistema guarda una captura de la pantalla para mostrarla en el selector de aplicaciones recientes. Sin protección, esa captura podría mostrar el disponible del mes o los últimos movimientos a cualquiera que mire el celular. MisLukas lo evita así:
+Cuando el usuario cambia de aplicación, el sistema guarda una captura de la pantalla para mostrarla en el selector de aplicaciones recientes. Sin protección, esa captura podría mostrar el disponible del mes o los últimos movimientos a cualquiera que mire el celular. MisLukas lo evita así (Fase 6C):
 
-- **En Android**, se marca la ventana de la aplicación como segura (FLAG_SECURE). El sistema muestra una vista en blanco en recientes y además impide las capturas y grabaciones de pantalla.
-- **En iOS**, al pasar a segundo plano se superpone una vista con el logo de la aplicación sobre el contenido, de modo que la captura del sistema no muestre información.
+- **En Android e iOS**, cuando la app deja de estar activa, se pone encima del contenido una capa propia con el logo y el nombre de la app, sin datos. Se quita al volver.
+- **En Android 13 o superior**, además, la app le pide al sistema que no guarde la captura de recientes (`setRecentsScreenshotEnabled(false)`). En versiones anteriores queda solo la capa, que el sistema puede no alcanzar a capturar en todos los celulares.
 
-Bloquear las capturas de pantalla tiene un costo: el usuario tampoco puede capturar sus reportes para compartirlos. Por eso la protección se aplica a las pantallas con información financiera, y en una versión futura se ofrecerá la exportación de reportes (4.2) como alternativa controlada.
+No se usa FLAG_SECURE: impediría también las capturas de pantalla, que el usuario puede necesitar (y que se usan para el informe del proyecto). En una versión futura se ofrecerá la exportación de reportes (4.2) como forma controlada de compartirlos.
 
 8.8.3.1 Notificaciones de alertas de presupuesto (Fase 6B)
 
@@ -362,24 +378,32 @@ Una notificación puede aparecer con el celular bloqueado, a la vista de cualqui
 
 - **Nunca llevan montos**, ni en la pantalla de bloqueo ni con el celular desbloqueado. El texto solo dice el porcentaje, la categoría y, en la del 100%, el mes: "Llevas el 78% de tu presupuesto de Mercado.", "Llegaste al 100% de tu presupuesto de Mercado de octubre." o "Superaste tu presupuesto de Mercado de octubre.". El monto restante solo se ve dentro de la app.
 - **Son privadas en la pantalla de bloqueo** (`NotificationVisibility.private`): en una pantalla de bloqueo segura, Android muestra solo que hay una notificación de MisLukas, sin el texto.
-- **El payload no tiene datos**: es solo la ruta de Presupuestos (`/profile/budgets`), y la app no acepta otra ruta desde una notificación. Al tocarla, la pantalla solo se abre con la sesión lista. En la Fase 6C ese camino deberá pasar primero por el desbloqueo con PIN o biometría (8.8.2).
+- **El payload no tiene datos**: es solo la ruta de Presupuestos (`/profile/budgets`), y la app no acepta otra ruta desde una notificación. Al tocarla, la pantalla solo se abre con la sesión lista. Con la app bloqueada, ese camino pasa primero por el desbloqueo (8.8.2, Fase 6C).
 - **No hay notificaciones programadas** ni trabajo en segundo plano: la app no declara alarmas exactas, arranque del sistema ni servicios en primer plano.
 - El registro de alertas enviadas (tabla `alertas_enviadas`) y los ajustes de notificaciones viven en la base cifrada.
 
 8.8.4 Borrado de datos locales
 
-Al cerrar sesión, al eliminar la cuenta o al superar los intentos fallidos del PIN, la aplicación elimina del dispositivo:
+**Qué hace "Cerrar sesión"** (Fase 6C):
+
+- **Con "Ingresar con huella, rostro o PIN" activo** (y el celular con bloqueo de pantalla), el diálogo ofrece dos opciones:
+  - **"Cerrar sesión"**: vuelve al login y **no borra nada**. No revoca la sesión en Supabase ni borra la base, sus claves, los recibos ni el dueño. La sesión queda en espera (8.8.2).
+  - **"Cerrar sesión y borrar los datos de este celular"**: el borrado total de abajo, pensado para celulares compartidos.
+- **Con el ajuste apagado**, "Cerrar sesión" siempre hace el borrado total.
+- **Eliminar la cuenta** siempre hace el borrado total.
+
+En el **borrado total** (y al eliminar la cuenta) la aplicación cierra la sesión en Supabase y elimina del dispositivo:
 
 - La base de datos local.
 - Las imágenes de recibos.
 - La clave de cifrado de la base y la de las imágenes de recibos (se borran primero: sin ellas, lo que quede es ilegible).
 - Las notificaciones de alertas que estén a la vista, y con la base, el registro de alertas enviadas y los ajustes de notificaciones (Fase 6B).
-- Los tokens de sesión.
-- El hash del PIN.
+- Los tokens de sesión y la marca de sesión en espera.
+- La preferencia "Ingresar con huella, rostro o PIN" (`mislukas.app_lock_enabled`). Antes de este cambio de diseño se conservaba como preferencia del dispositivo; ahora acompaña a los datos, porque si la heredara la siguiente cuenta, su "Cerrar sesión" no borraría sus datos sin que lo hubiera elegido.
 
-Si hay cambios pendientes de sincronizar, antes de cerrar sesión se intenta enviarlos. Si no hay conexión o el servidor rechazó alguno, se advierte al usuario que esos cambios se perderán y se le pide confirmar. Se eligió esta advertencia, en lugar de conservar los datos, porque dejar información financiera en un dispositivo sin sesión sería un riesgo mayor.
+Si hay cambios pendientes de sincronizar, antes del borrado total se intenta enviarlos. Si no hay conexión o el servidor rechazó alguno, se advierte al usuario que esos cambios se perderán y se le pide confirmar. Se eligió esta advertencia, en lugar de conservar los datos, porque dejar información financiera en un dispositivo sin sesión sería un riesgo mayor.
 
-Los mismos datos se borran cuando inicia sesión un usuario distinto del dueño de la base local (por ejemplo, después de una sesión revocada, 8.2.6), previa confirmación.
+Los mismos datos se borran cuando inicia sesión un usuario distinto del dueño de la base local (por ejemplo, después de una sesión revocada, 8.2.6, o con la sesión de otro usuario en espera), previa confirmación. En ese caso la sesión guardada del usuario anterior se reemplaza en este celular, aunque no se revoca en el servidor.
 
 8.8.5 Protección del código y de las dependencias
 
@@ -468,7 +492,7 @@ Las fotos de recibos requieren un manejo particular, porque contienen más infor
 - **Almacenamiento privado y cifrado:** se guarda en el almacenamiento interno de la app, no en la galería del usuario, y cifrada con una clave que solo tiene este dispositivo (8.8.1). La imagen conserva todo el texto del recibo, que la aplicación descarta: cifrada, ese texto solo se puede leer con la clave del dispositivo.
 - **Respaldo opcional:** solo se sube a la nube si el usuario activa el respaldo, y en ese caso a un _bucket_ privado con acceso restringido por usuario y URLs firmadas temporales (8.5.5).
 - **Datos extraídos mínimos:** de todo el texto del recibo, solo se guardan el total y el nombre del comercio. El resto del texto reconocido se descarta en memoria (la fecha de la compra solo se usa para sugerir la del movimiento). Ni el texto, ni los montos, ni las rutas de los archivos se escriben en los registros.
-- **Eliminación:** el usuario puede eliminar la foto de un recibo sin eliminar el movimiento. Al eliminar un movimiento se borra su foto, y al eliminar la cuenta o cerrar sesión se borran todas, con su clave. *En la Fase 6A, eliminar solo la foto queda pendiente, junto con el respaldo en Storage (docs/07 §7.5).*
+- **Eliminación:** el usuario puede eliminar la foto de un recibo sin eliminar el movimiento. Al eliminar un movimiento se borra su foto, y al eliminar la cuenta o en el borrado total al cerrar sesión se borran todas, con su clave. *En la Fase 6A, eliminar solo la foto queda pendiente, junto con el respaldo en Storage (docs/07 §7.5).*
 
 8.9.4 Eliminación de cuenta desde la aplicación
 

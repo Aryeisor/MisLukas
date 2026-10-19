@@ -83,7 +83,7 @@ Fecha de las pruebas y observaciones: por completar.
 | Salir de Confirma los datos sin guardar | Se borra el `.enc`.                                                             | por completar      |
 | Eliminar el movimiento                  | Se borra su imagen.                                                             | por completar      |
 | Siguiente arranque                      | Se borran imágenes huérfanas y lo que la cámara y la galería dejan en la caché. | por completar      |
-| Cerrar sesión                           | Se borran la base, la carpeta `recibos/` y las dos claves de cifrado.           | por completar      |
+| Cerrar sesión y borrar los datos        | Se borran la base, la carpeta `recibos/` y las dos claves de cifrado.           | por completar      |
 
 **Recibos reales.** La foto se toma con el recibo solo, sobre una superficie lisa y sin otros papeles alrededor (docs/07 §7.3).
 
@@ -141,7 +141,80 @@ Pruebas en celulares reales con `flutter run --dart-define-from-file=env/dev.jso
 
 Fecha de las pruebas y observaciones: por completar.
 
-## 9.6 Capturas pendientes
+## 9.6 Fase 6C: ingresar con huella, rostro o PIN
+
+Pruebas en celulares reales con `flutter run --dart-define-from-file=env/dev.json` y una cuenta de prueba. El moto g72 tiene lector de huella; el Galaxy J4 no, así que en él el diálogo del sistema muestra directamente el PIN o patrón del celular. Antes de empezar, el celular debe tener un bloqueo de pantalla (salvo en los casos que lo quitan). No hay atajos para saltar el bloqueo: si algo falla, "¿No eres tú? Cerrar sesión" › "Cerrar sesión y borrar los datos de este celular" en la pantalla de desbloqueo.
+
+Pruebas automáticas del cambio de diseño (`test/features/auth/presentation/quick_sign_in_test.dart`, con el autenticador falso): el botón visible y oculto según cada condición (ajuste, sesión en espera, bloqueo de pantalla, pestaña Registrarse), el ingreso con el diálogo, cancelado y sin conexión, la sesión vencida, "Cerrar sesión" que conserva frente al borrado total (con el ajuste activo y apagado), el fallo al guardar la espera y otra cuenta en el mismo celular (aceptar y rechazar el borrado). `app_lock_gate_test.dart` cubre "¿No eres tú?" con las dos opciones y `local_data_wiper_test.dart` que el borrado quita la espera y la preferencia.
+
+**Activación.**
+
+| Caso | Qué se verifica | moto g72 | Galaxy J4 |
+| --- | --- | --- | --- |
+| Oferta al iniciar sesión | Después de iniciar sesión y sincronizar aparece "Ingresa con tu huella, rostro o PIN"; "Activar" no muestra el diálogo del sistema ni pide la contraseña; aparece "Listo. La próxima vez entrarás con tu huella, rostro o el PIN de tu celular." y la siguiente apertura pide desbloquear. | por completar | por completar |
+| Oferta después de la bienvenida | Con una cuenta nueva, la oferta aparece al terminar u omitir la bienvenida, no encima de ella. | por completar | por completar |
+| "Ahora no" | No vuelve a preguntar en esa sesión; después de "Cerrar sesión" (con el ajuste apagado es el borrado total) y de entrar de nuevo, se ofrece otra vez. | por completar | por completar |
+| Activar desde el Perfil | El interruptor pide la contraseña; con la incorrecta dice "La contraseña no es correcta." y no muestra el diálogo del sistema; con la correcta muestra el diálogo y queda activo. | por completar | por completar |
+| Activar sin conexión | En modo avión, al escribir la contraseña dice "Necesitas conexión a internet para verificar tu contraseña.". | por completar | por completar |
+| Desactivar desde el Perfil | Pide solo el diálogo del sistema; si se cancela, sigue activo. | por completar | por completar |
+
+**Desbloqueo.**
+
+| Caso | Qué se verifica | moto g72 | Galaxy J4 |
+| --- | --- | --- | --- |
+| Arranque en frío | Al abrir la app cerrada aparece "Hola, \<nombre\>", el diálogo del sistema y los botones "Ingresar con huella, rostro o PIN" y "¿No eres tú? Cerrar sesión"; no se ve ningún dato antes de desbloquear. | por completar | por completar |
+| Huella | El diálogo acepta la huella. | por completar | no aplica |
+| PIN o patrón del celular | Sin usar la huella (o en el J4, sin lector), el mismo diálogo acepta el PIN o patrón del celular (Android 10 en el J4: confirmación de credenciales del sistema). | por completar | por completar |
+| Cancelar | "No se desbloqueó. Toca Ingresar con huella, rostro o PIN para intentarlo de nuevo."; "Ingresar con huella, rostro o PIN" vuelve a mostrar el diálogo. | por completar | por completar |
+| Bloqueo temporal del sistema | Varios intentos fallidos: el sistema pausa el desbloqueo y la app dice "Tu celular pausó el desbloqueo por varios intentos fallidos…". No se borra nada. | por completar | por completar |
+| Cerrar sesión desde el bloqueo | "¿No eres tú? Cerrar sesión" ofrece "Cerrar sesión" (vuelve al login con el botón, sin borrar nada) y "Cerrar sesión y borrar los datos de este celular" (avisa si hay cambios sin sincronizar y borra todo). | por completar | por completar |
+| Volver a entrar después del borrado total | Iniciar sesión con la contraseña: la preferencia se borró, así que se ofrece activarla otra vez y no hay botón en el login. | por completar | por completar |
+| Formulario abierto | Con un gasto a medio escribir, salir más de 5 min y desbloquear: el formulario sigue igual. | por completar | por completar |
+
+**Ingreso desde el login.**
+
+| Caso | Qué se verifica | moto g72 | Galaxy J4 |
+| --- | --- | --- | --- |
+| Cerrar sesión conservando | Perfil › "Cerrar sesión" › "Cerrar sesión": vuelve al login con "Ingresar con huella, rostro o PIN" debajo de "Iniciar sesión". En modo avión con cambios pendientes, no pide confirmar que se pierden. | por completar | por completar |
+| Ingresar con el botón | El diálogo del sistema ("Confirma que eres tú para ingresar") y, si es correcto, Inicio sin contraseña ni otro desbloqueo. Los cambios pendientes se envían. | por completar | por completar |
+| Arranque en frío en espera | Cerrar sesión conservando, cerrar la app y abrirla: aparece el login con el botón, no la pantalla de desbloqueo. | por completar | por completar |
+| Sin conexión | En modo avión, el botón entra a Inicio. | por completar | por completar |
+| Sesión vencida | Cerrar sesión conservando en el moto, cambiar la contraseña desde el J4 (recuperación) y tocar el botón en el moto: "Tu sesión expiró. Ingresa con tu correo y contraseña.", el botón desaparece y, con la contraseña nueva, los datos siguen ahí. | por completar | por completar |
+| Otra cuenta | Con la sesión en espera, entrar con otra cuenta: aparece "¿Usar esta cuenta en este celular?"; al continuar, el login ya no muestra el botón de la cuenta anterior. | por completar | por completar |
+| Sin bloqueo de pantalla | Con la sesión en espera, quitar el bloqueo de pantalla y volver a la app: el botón desaparece; con la contraseña se entra y los datos siguen ahí. | por completar | por completar |
+
+**Cuándo se bloquea.**
+
+| Caso | Qué se verifica | moto g72 | Galaxy J4 |
+| --- | --- | --- | --- |
+| 4 min fuera | Volver antes de 5 minutos no pide desbloquear. | por completar | por completar |
+| 5 min fuera | Volver después de 5 minutos pide desbloquear. | por completar | por completar |
+| Celular dormido | Con la pantalla apagada más de 5 minutos (reposo profundo), al volver pide desbloquear. | por completar | por completar |
+| Cámara y galería | Abrir la galería desde la foto del recibo, demorarse más de 5 minutos y volver: no pide desbloquear. | por completar | por completar |
+| Permisos | El diálogo del permiso de cámara o de notificaciones no bloquea al volver. | por completar | por completar |
+| Ajustes | "Abrir Ajustes" desde un permiso: volver antes de 30 minutos no pide desbloquear; después de 30 minutos, sí. | por completar | por completar |
+| Notificación con la app bloqueada | Salir más de 5 minutos y tocar una alerta de presupuesto: primero se desbloquea y luego se abre Presupuestos. | por completar | por completar |
+| Notificación con la app cerrada | Con la app cerrada, tocar una alerta: desbloqueo y luego Presupuestos. | por completar | por completar |
+| Datos de otra cuenta | Con el bloqueo activo y la sesión de otra cuenta guardada, el aviso "¿Usar esta cuenta en este celular?" aparece solo después de desbloquear. | por completar | por completar |
+
+**Celular sin bloqueo de pantalla.**
+
+| Caso | Qué se verifica | moto g72 | Galaxy J4 |
+| --- | --- | --- | --- |
+| Sin bloqueo desde el inicio | No se ofrece el bloqueo; en el Perfil la fila está desactivada con "Configura un bloqueo de pantalla en tu celular para proteger MisLukas". | por completar | por completar |
+| Quitar el bloqueo del celular | Con el bloqueo de la app activo, quitar el bloqueo de pantalla en Ajustes: la app abre sin bloqueo y la fila del Perfil queda desactivada con ese texto. | por completar | por completar |
+| Volver a ponerlo | Configurar de nuevo un bloqueo de pantalla: la fila se habilita al volver a la app y, en el siguiente bloqueo (arranque o 5 minutos fuera), se pide desbloquear sin activarlo otra vez. | por completar | por completar |
+
+**Vista de recientes y capturas.**
+
+| Caso | Qué se verifica | moto g72 | Galaxy J4 |
+| --- | --- | --- | --- |
+| Recientes | Con Inicio a la vista, abrir recientes: la miniatura no muestra montos (Android 13+: sin captura; Android 10: capa con el logo, si el sistema alcanza a pintarla). | por completar | por completar |
+| Captura de pantalla | Dentro de la app, la captura de pantalla funciona (no hay FLAG_SECURE). | por completar | por completar |
+
+Fecha de las pruebas y observaciones: por completar.
+
+## 9.7 Capturas pendientes
 
 Pantallas que hay que fotografiar en un celular real para el informe. Conviene usar una cuenta de prueba con datos de demostración y ninguna información personal.
 
@@ -188,6 +261,17 @@ Pantallas que hay que fotografiar en un celular real para el informe. Conviene u
 - Notificación en la pantalla de bloqueo (sin el texto).
 - Perfil › Preferencias con el interruptor "Notificaciones de presupuesto" en sus estados.
 - Inicio con el aviso "Sin conexión" en modo avión.
+
+### Bloqueo (Fase 6C)
+
+- Oferta "Ingresa con tu huella, rostro o PIN".
+- Login con "Ingresar con huella, rostro o PIN" y con "Tu sesión expiró…".
+- Diálogo de "Cerrar sesión" con las dos opciones.
+- Pantalla de desbloqueo con el diálogo del sistema (huella en el moto g72 y PIN o patrón en el J4).
+- Pantalla de desbloqueo con el aviso de cancelado y con el de bloqueo temporal.
+- Perfil › Preferencias con "Ingresar con huella, rostro o PIN" activo, apagado y desactivado sin bloqueo de pantalla.
+- Activar el ajuste: pantalla de la contraseña.
+- Vista de recientes sin datos.
 
 ### Supabase
 

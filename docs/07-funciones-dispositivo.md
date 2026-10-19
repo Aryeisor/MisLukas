@@ -14,7 +14,7 @@ Esta sección describe cada funcionalidad del dispositivo que usa la aplicación
 | Notificaciones locales    | flutter_local_notifications   | Avisar antes de pasarse del presupuesto           | RF-32                   |
 | Almacenamiento interno    | path_provider + Drift         | Guardar datos e imágenes disponibles sin conexión | RF-24, RNF-09           |
 | Almacenamiento seguro     | flutter_secure_storage        | Proteger tokens y la clave de cifrado             | RNF-04, RNF-05          |
-| Biometría y PIN           | local_auth                    | Desbloquear rápido sin exponer los datos          | RF-12, RNF-08           |
+| Bloqueo del celular       | local_auth                    | Desbloquear rápido sin exponer los datos          | RF-12, RF-46, RNF-08    |
 | Detección de conectividad | connectivity_plus             | Sincronizar automáticamente al volver la conexión | RF-25, RNF-10           |
 
 ## 7.1 Cámara: captura del recibo
@@ -142,7 +142,7 @@ Sin el interruptor o sin permiso, las alertas se siguen registrando: al activarl
 - **Visibilidad privada.** Se configuran con `NotificationVisibility.private`: en una pantalla de bloqueo segura, Android oculta el texto.
 - **Payload sin datos.** Es solo la ruta de Presupuestos (docs/08 §8.8.3.1).
 
-**Al tocar la notificación** se abre Presupuestos (`/profile/budgets`) encima de donde estaba el usuario, con la app abierta o cerrada, una vez que la sesión está lista (`NotificationTapLauncher`). **En la Fase 6C, este camino deberá pasar primero por el desbloqueo con PIN o biometría.**
+**Al tocar la notificación** se abre Presupuestos (`/profile/budgets`) encima de donde estaba el usuario, con la app abierta o cerrada, una vez que la sesión está lista (`NotificationTapLauncher`). Si la app está bloqueada, primero se desbloquea y luego se abre Presupuestos (Fase 6C, 7.7).
 
 **Implementación.**
 
@@ -210,25 +210,63 @@ Qué se guarda en este almacenamiento.
 | Token de renovación               | Permite obtener nuevos tokens de acceso sin pedir la contraseña |
 | Clave de cifrado de la base local | Sin ella, la base de datos del dispositivo es ilegible          |
 | Clave de las imágenes de recibos  | Sin ella, las fotos de recibos guardadas son ilegibles          |
-| Hash del PIN de la aplicación     | Permite verificar el PIN sin guardarlo en texto plano           |
+| Preferencia de bloqueo de la app  | Decide si la app se bloquea antes de abrir la base (Fase 6C)    |
 
 **Configuración adicional.** En iOS, los datos se configuran para que solo estén accesibles con el dispositivo desbloqueado y para que no se transfieran a otro dispositivo al restaurar una copia de seguridad. Así, los tokens y la clave de cifrado pertenecen a un dispositivo específico, y en un celular nuevo el usuario debe iniciar sesión de nuevo, como se describe en el escenario 6 de la sección 3.3.
 
-## 7.7 Biometría o PIN: desbloqueo de la aplicación
+## 7.7 Ingresar con huella, rostro o PIN (bloqueo del celular)
 
-Una vez iniciada la sesión, pedir la contraseña cada vez que se abre la aplicación sería seguro, pero tan incómodo que el usuario terminaría abandonándola. La autenticación biométrica resuelve ese equilibrio: es rápida y protege los datos si otra persona toma el celular.
+Una vez iniciada la sesión, pedir la contraseña cada vez que se abre la aplicación sería seguro, pero tan incómodo que el usuario terminaría abandonándola. El bloqueo del propio celular resuelve ese equilibrio: es rápido y protege los datos si otra persona toma el celular.
 
-**Cómo funciona.** MisLukas usa local_auth, que se apoya en la autenticación biométrica del sistema: huella dactilar en Android e iOS, y Face ID o Touch ID en iOS.
+Un solo ajuste, **"Ingresar con huella, rostro o PIN"**, controla dos cosas (cambio de diseño de la 6C tras las pruebas con usuarios, como en las apps bancarias):
 
-- La aplicación **nunca tiene acceso a la huella ni al rostro del usuario**. Esos datos permanecen en el hardware seguro del dispositivo, y el sistema solo le responde a la app si la verificación fue exitosa o no.
-- La biometría se ofrece después del primer inicio de sesión y puede activarse o desactivarse desde el perfil (RF-46).
+1. **El bloqueo al reabrir la app** (pantalla de desbloqueo, más abajo).
+2. **El ingreso desde el inicio de sesión.** Con el ajuste activo, "Cerrar sesión" no revoca la sesión ni borra nada: la deja guardada y en espera, y el login muestra el botón "Ingresar con huella, rostro o PIN" (docs/08 §8.8.4).
 
-**El PIN como alternativa.** No todos los dispositivos tienen sensor biométrico, la biometría puede fallar (manos mojadas, poca luz, tapabocas) y algunas personas prefieren no usarla. Por eso MisLukas permite crear un PIN de cuatro dígitos propio de la aplicación, distinto del código de desbloqueo del celular.
+**Cómo funciona.** MisLukas usa local_auth con `biometricOnly: false`: el sistema muestra en un solo diálogo la huella o el rostro si están configurados y, si no, o si fallan, el PIN, patrón o contraseña del celular. La app no elige el método; lo decide el sistema.
 
-- **El PIN nunca se guarda tal cual.** Se guarda su hash, calculado con un valor aleatorio (_salt_), en el almacenamiento seguro, y al ingresarlo se compara el hash.
-- **Límite de intentos.** Después de cinco intentos fallidos, la aplicación deja de aceptar el PIN y exige iniciar sesión con correo y contraseña, lo que requiere conexión y está protegido por los límites de intentos del servidor. Así se evita que alguien pruebe todas las combinaciones posibles.
+- La aplicación **nunca tiene acceso a la huella, al rostro ni al PIN del celular**. Esos datos permanecen en el hardware seguro del dispositivo, y el sistema solo le responde a la app si la verificación fue exitosa o no.
+- **No hay PIN propio de la aplicación** (decisión de la Fase 6C, que reemplaza el PIN de cuatro dígitos de versiones anteriores de este documento). Las razones:
+  - **Menos fricción.** El usuario ya sabe desbloquear su celular; no tiene otra clave que crear ni recordar, y no existe "Olvidé mi PIN".
+  - **Nada que guardar.** La app no guarda ningún PIN ni su hash, así que no hay nada que proteger o filtrar.
+  - **Intentos controlados por el sistema operativo.** Después de varios intentos fallidos el sistema pausa el desbloqueo por un tiempo. Por eso se eliminó el requisito de borrar los datos tras cinco intentos fallidos de un PIN propio.
 
-**Bloqueo automático.** La aplicación se bloquea de nuevo cuando pasa más de cinco minutos en segundo plano (RNF-08). Al volver, se solicita otra vez la biometría o el PIN antes de mostrar cualquier dato.
+**Activación.**
+
+- **Después de iniciar sesión o registrarse**, tras la primera sincronización (y después de la bienvenida, si se muestra), se ofrece "Ingresa con tu huella, rostro o PIN", con "Activar" y "Ahora no". Como el usuario acaba de escribir su contraseña, "Activar" solo guarda la preferencia, sin abrir el diálogo del sistema (pedir la huella justo después de la contraseña se sentía como un doble factor), y muestra "Listo. La próxima vez entrarás con tu huella, rostro o el PIN de tu celular.". El bloqueo aplica desde la siguiente apertura o regreso. "Ahora no" no vuelve a preguntar hasta el próximo inicio de sesión. Si el bloqueo ya estaba activo en este celular, no se ofrece.
+- **Desde el Perfil** (RF-46), con el interruptor "Ingresar con huella, rostro o PIN". Activarlo pide la contraseña de la cuenta, verificada con Supabase (requiere conexión), y luego el diálogo del sistema: quien encuentre el celular desbloqueado con la app abierta no conoce la contraseña. Desactivarlo pide el diálogo del sistema.
+- La preferencia se guarda en el almacenamiento seguro (7.6) y **acompaña a los datos del dueño de la base local**: sobrevive al cierre de sesión que guarda la sesión, y el borrado total (cerrar sesión borrando los datos, eliminar la cuenta o aceptar el borrado cuando entra otra cuenta) la quita (docs/08 §8.8.4). Así, quien entra después de un borrado no la hereda y se le ofrece activarla. Esto reemplaza la decisión anterior de la 6C, en la que la preferencia era del dispositivo y sobrevivía al borrado: con el nuevo diseño, heredarla haría que el cierre de sesión de otra persona no borrara sus datos.
+
+**Cuándo se bloquea.**
+
+- Al abrir la app en frío con una sesión guardada. Sin sesión no hay bloqueo.
+- Al volver después de **cinco minutos o más en segundo plano** (RNF-08). Se miden dos relojes: el monotónico, que puede detenerse con el celular en reposo profundo, y la hora del sistema; se bloquea si cualquiera de los dos llega al límite, o si la hora del sistema retrocedió.
+- **Excepciones.** Si la app salió por una acción propia (el diálogo de permisos, la galería, los Ajustes del sistema o el propio diálogo de desbloqueo), el límite sube a 30 minutos. Los Ajustes cuentan solo para el regreso siguiente.
+- Iniciar sesión con contraseña, o desde el login con el diálogo del sistema, deja la app desbloqueada.
+
+**Ingreso desde el inicio de sesión** (docs/05, pantalla 1).
+
+- **Cuándo aparece el botón.** El ajuste está activo, hay una sesión guardada en espera de este usuario y el celular tiene bloqueo de pantalla (se revisa al abrir el login y al volver a primer plano). El diálogo no se abre solo: el usuario toca el botón.
+- **Sesión en espera.** Al cerrar sesión con el ajuste activo, la app guarda en el almacenamiento seguro el id del usuario (`mislukas.parked_session_user`) y se comporta como sin sesión: login, sin sincronización, sin alertas ni bienvenida. La sesión de Supabase, la base cifrada, sus claves y los recibos se quedan, así que los cambios sin sincronizar se envían al volver a entrar. Un arranque en frío con la sesión en espera abre el login, no la pantalla de desbloqueo. Si no se puede guardar la marca, no se cierra la sesión; si no se puede leer al abrir, se toma la sesión actual como en espera.
+- **Al tocar el botón**, se abre el diálogo del sistema ("Confirma que eres tú para ingresar") y, si es correcto, la sesión se renueva con el servidor (`refreshSession`, que detecta una sesión revocada aunque el token de acceso no haya vencido) y se entra a Inicio.
+- **Sesión vencida o revocada** (contraseña cambiada en otro celular, que cierra todas las sesiones; cuenta eliminada): el diálogo pasa pero el servidor rechaza la renovación. gotrue borra la sesión, se muestra "Tu sesión expiró. Ingresa con tu correo y contraseña." y el botón desaparece. Los datos quedan cifrados con su dueño, como en cualquier sesión revocada (docs/06 §6.6.4): al entrar con la contraseña el mismo usuario los recupera. Si la autorrenovación de gotrue lo detecta antes con la app abierta, el botón desaparece solo.
+- **Sin conexión** al tocar el botón, se entra igual: la sesión sigue guardada y se revisa cuando vuelva la red (offline-first, como en la Fase 5C).
+- **Con la contraseña** del mismo usuario también se sale de la espera.
+- **Otra persona inicia sesión** con su correo y contraseña en ese celular: su sesión reemplaza la guardada del usuario anterior, que se descarta en este celular (no se revoca en el servidor), y se aplica el aviso de datos de otra cuenta (`ForeignDataPrompt`). Si acepta, el borrado quita los datos, la espera y la preferencia; si no, se cierra su sesión y los datos del anterior siguen cifrados hasta que entre con su contraseña.
+- **Registro y recuperación de contraseña** no cambian. Verificar un código reemplaza la sesión guardada; volver antes de verificarlo la conserva. Si la app se cierra justo mientras se verifica un código de recuperación, al abrirla se cierra la sesión guardada (limpieza de la recuperación interrumpida).
+
+**Pantalla de desbloqueo** (docs/05, pantalla 4). Cubre todo antes de mostrar datos: Inicio, la bienvenida, el aviso de datos de otra cuenta y el camino de una notificación (que abre Presupuestos después de desbloquear). El contenido queda montado fuera de escena, así que un formulario abierto no se pierde. Tiene "Ingresar con huella, rostro o PIN" y "¿No eres tú? Cerrar sesión" (el mismo diálogo de dos opciones del Perfil), y avisa si el usuario canceló o si el sistema pausó el desbloqueo por intentos.
+
+**Celular sin bloqueo de pantalla.** El botón del login no aparece y "Cerrar sesión" hace el borrado total. La app funciona sin bloqueo y la fila del Perfil aparece desactivada con "Configura un bloqueo de pantalla en tu celular para proteger MisLukas". Si el usuario quita el bloqueo del celular después de activarlo, la protección se pausa (la preferencia se conserva) y se reanuda sola en el siguiente bloqueo, cuando vuelva a configurarlo. No se cierra la sesión: para quitar el bloqueo del celular Android pide el PIN actual, y quien lo conoce también podría desbloquear la app.
+
+**Implementación (Fase 6C).**
+
+- **Paquete.** local_auth 3.0.2, con `local_auth_android` 2.3.0 (compileSdk de Flutter, minSdk 24, `androidx.biometric` 1.1.0) y `local_auth_darwin` 2.0.5 como dependencias directas solo para poner en español los textos del diálogo.
+- **Android 8 a 10 (API menor que 30).** Con `biometricOnly: false`, el plugin permite `DEVICE_CREDENTIAL` cuando `KeyguardManager.isDeviceSecure`; en un celular sin lector de huella (por ejemplo, el Galaxy J4) el sistema muestra directamente su PIN o patrón. Se comprueba a mano (docs/09 §9.6).
+- **Detección del bloqueo de pantalla.** `isDeviceSupported()` es `isDeviceSecure` o biometría registrada, y Android no permite registrar biometría sin un bloqueo seguro: sin bloqueo de pantalla da false. Si el diálogo responde `noCredentialsSet`, también se toma como "sin bloqueo".
+- **Archivos nativos.** `MainActivity` extiende `FlutterFragmentActivity`, el manifiesto declara `USE_BIOMETRIC` y los temas `LaunchTheme` y `NormalTheme` son AppCompat (sin AppCompat el diálogo falla en Android 8). En iOS, `NSFaceIDUsageDescription`.
+- **Puerta de la app (limitación).** El diálogo del sistema lo exige el código de la app; la sesión guardada no está atada a una clave del Keystore que requiera autenticación (docs/08 §8.8.2).
+- **Sin atajos.** No hay forma de saltar el bloqueo, ni en desarrollo. En el emulador se configura un PIN de pantalla y la huella se simula desde los controles extendidos.
 
 ## 7.8 Detección de conectividad: disparo de la sincronización
 
@@ -276,7 +314,7 @@ Los sistemas operativos móviles protegen las capacidades sensibles del disposit
 | Cámara (CAMERA en Android; NSCameraUsageDescription en iOS)                                         | Android e iOS | Tomar la foto del recibo                                 | La primera vez que el usuario elige "Foto del recibo" y toca "Continuar"                                                                                              | La app ofrece seleccionar una foto de la galería o registrar el gasto manualmente. Si el permiso se negó de forma permanente, se muestra un botón que lleva a la configuración del sistema. |
 | Selección de fotos (selector del sistema; NSPhotoLibraryUsageDescription declarado en iOS)          | Android e iOS | Elegir una foto del recibo ya tomada                     | Al tocar el acceso a la galería desde la vista de cámara                                                                                                              | En las versiones actuales del sistema, el selector no requiere un permiso amplio. Si se limita el acceso, el usuario puede usar la cámara o el registro manual.                             |
 | Notificaciones (POST_NOTIFICATIONS en Android 13 o superior; autorización de notificaciones en iOS) | Android e iOS | Enviar alertas de presupuesto                            | La primera vez que el usuario define un presupuesto, momento en que la alerta empieza a tener sentido                                                                 | Las alertas se siguen mostrando dentro de la app, en la pantalla de inicio. Solo se pierden los avisos fuera de ella. Se pueden activar después desde el perfil.                            |
-| Biometría (USE_BIOMETRIC en Android; NSFaceIDUsageDescription en iOS)                               | Android e iOS | Desbloquear la app con huella o rostro                   | Después del primer inicio de sesión, al ofrecer activar el desbloqueo biométrico. En Android se concede al instalar; en iOS, Face ID pide confirmación la primera vez | El desbloqueo se hace con el PIN de la aplicación. Se puede activar después desde el perfil.                                                                                                |
+| Bloqueo del celular (USE_BIOMETRIC en Android; NSFaceIDUsageDescription en iOS)                     | Android e iOS | Desbloquear la app con huella, rostro o el PIN del celular | Después de iniciar sesión, al ofrecer activar el bloqueo. En Android se concede al instalar; en iOS, Face ID pide confirmación la primera vez | En iOS, si se niega Face ID, el sistema ofrece el código del celular. Sin bloqueo de pantalla, la app funciona sin bloqueo. |
 | Internet (INTERNET)                                                                                 | Android       | Comunicarse con Supabase: autenticación y sincronización | Se concede al instalar, sin diálogo para el usuario                                                                                                                   | No aplica: es un permiso normal que el usuario no puede negar individualmente.                                                                                                              |
 | Estado de la red (ACCESS_NETWORK_STATE)                                                             | Android       | Detectar cambios de conectividad para sincronizar        | Se concede al instalar, sin diálogo para el usuario                                                                                                                   | No aplica.                                                                                                                                                                                  |
 

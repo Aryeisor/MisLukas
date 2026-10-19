@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../notifications/local_notifications.dart';
+import '../security/app_lock_store.dart';
 import '../security/database_key_store.dart';
 import '../security/device_session_store.dart';
 import '../security/receipt_key_store.dart';
@@ -31,6 +32,10 @@ abstract interface class LocalDataWiper {
 /// También quita las notificaciones de alertas mostradas. El registro de
 /// alertas enviadas y los ajustes del dispositivo viven en la base y se van
 /// con ella.
+///
+/// También borra la sesión en espera y la preferencia "Ingresar con huella,
+/// rostro o PIN" ([AppLockStore]): acompañan a los datos de la cuenta y quien
+/// entre después no las hereda (docs/08 §8.8.4).
 class FileLocalDataWiper implements LocalDataWiper {
   FileLocalDataWiper({
     required this._closeDatabase,
@@ -38,6 +43,7 @@ class FileLocalDataWiper implements LocalDataWiper {
     required this._keyStore,
     required this._receiptKeyStore,
     required this._sessionStore,
+    required this._appLockStore,
     required this._onWiped,
     this._cancelNotifications,
   });
@@ -47,6 +53,7 @@ class FileLocalDataWiper implements LocalDataWiper {
   final DatabaseKeyStore _keyStore;
   final ReceiptKeyStore _receiptKeyStore;
   final DeviceSessionStore _sessionStore;
+  final AppLockStore _appLockStore;
 
   /// Libera la base cerrada para que el próximo uso abra una nueva.
   final void Function() _onWiped;
@@ -66,6 +73,13 @@ class FileLocalDataWiper implements LocalDataWiper {
     await _receiptKeyStore.deleteKey();
     await _sessionStore.clearOwner();
 
+    try {
+      await _sessionStore.clearParkedUser();
+      await _appLockStore.clear();
+    } catch (_) {
+      // La marca obsoleta se descarta al iniciar sesión otra cuenta; la
+      // preferencia sin datos no impide seguir con el borrado.
+    }
     try {
       await _cancelNotifications?.call().timeout(closeTimeout);
     } catch (_) {
@@ -100,6 +114,7 @@ final localDataWiperProvider = Provider<LocalDataWiper>(
     keyStore: ref.read(databaseKeyStoreProvider),
     receiptKeyStore: ref.read(receiptKeyStoreProvider),
     sessionStore: ref.read(deviceSessionStoreProvider),
+    appLockStore: ref.read(appLockStoreProvider),
     onWiped: () => ref.invalidate(appDatabaseProvider),
     cancelNotifications: ref.read(localNotificationsProvider).cancelAll,
   ),

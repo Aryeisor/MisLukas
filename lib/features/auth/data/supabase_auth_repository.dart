@@ -126,6 +126,28 @@ class SupabaseAuthRepository implements AuthRepository {
     );
   }
 
+  /// refreshSession siempre consulta al servidor: detecta una sesión revocada
+  /// aunque el token de acceso aún no venza. Si la rechaza, gotrue borra la
+  /// sesión local y emite signedOut.
+  @override
+  Future<void> resumeSession() async {
+    if (_auth.currentSession == null) {
+      throw const AuthFailureException(AuthFailure.sessionExpired);
+    }
+    try {
+      await _auth.refreshSession();
+    } on AuthRetryableFetchException catch (error) {
+      throw AuthFailureException(mapAuthException(error));
+    } on AuthException catch (error) {
+      if (error.statusCode == '429') {
+        throw const AuthFailureException(AuthFailure.rateLimited);
+      }
+      throw const AuthFailureException(AuthFailure.sessionExpired);
+    } catch (error) {
+      throw AuthFailureException(mapAuthException(error));
+    }
+  }
+
   @override
   Future<void> signOut() => _signOut(SignOutScope.local);
 

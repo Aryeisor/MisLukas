@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database_providers.dart';
 import '../../../core/notifications/local_notifications.dart';
+import '../../../core/security/external_activity_tracker.dart';
 import '../../../core/utils/utils_providers.dart';
 import '../../movements/data/movements_providers.dart';
 import '../domain/repositories/budget_alert_log.dart';
@@ -87,7 +88,9 @@ final notificationSettingsRepositoryProvider =
     );
 
 final notificationPermissionProvider = Provider<NotificationPermissionService>(
-  (ref) => const PermissionHandlerNotificationPermission(),
+  (ref) => PermissionHandlerNotificationPermission(
+    ref.read(externalActivityTrackerProvider),
+  ),
 );
 
 final budgetAlertNotifierProvider = Provider<BudgetAlertNotifier>(

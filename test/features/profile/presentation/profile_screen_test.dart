@@ -9,6 +9,7 @@ import 'package:mislukas/core/widgets/dev/demo_data_actions.dart';
 import 'package:mislukas/core/widgets/widgets.dart';
 import 'package:mislukas/features/auth/domain/entities/auth_user.dart';
 import 'package:mislukas/features/auth/presentation/login_screen.dart';
+import 'package:mislukas/features/auth/presentation/sign_out_messages.dart';
 import 'package:mislukas/features/profile/data/profile_providers.dart';
 import 'package:mislukas/features/profile/domain/repositories/account_repository.dart';
 import 'package:mislukas/features/profile/presentation/delete_account_screen.dart';
@@ -74,6 +75,11 @@ void main() {
     expect(find.text('Camila Rodríguez'), findsOneWidget);
     expect(find.text('camila@ejemplo.com'), findsOneWidget);
     expect(find.text('Perfil completo en una próxima versión'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.widgetWithText(AppSecondaryButton, 'Cerrar sesión'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(
       find.widgetWithText(AppSecondaryButton, 'Cerrar sesión'),
       findsOneWidget,
@@ -113,6 +119,11 @@ void main() {
       expect(find.byType(DemoDataActions), findsNothing);
       expect(find.text('Cargar datos de demostración'), findsNothing);
       expect(find.text('Borrar todos los datos'), findsNothing);
+      await tester.scrollUntilVisible(
+        find.text('Cerrar sesión'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('Cerrar sesión'), findsOneWidget);
     },
   );

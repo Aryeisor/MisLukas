@@ -12,8 +12,12 @@ import '../../../core/utils/utils_providers.dart';
 import '../../../core/widgets/dev/demo_data_actions.dart';
 import '../../../core/widgets/dev/receipt_cipher_benchmark_action.dart';
 import '../../../core/widgets/widgets.dart';
+import '../../auth/presentation/app_lock/app_lock_controller.dart';
 import '../../auth/presentation/auth_messages.dart';
+import '../../auth/presentation/sign_out_messages.dart';
+import '../../auth/presentation/widgets/sign_out_dialog.dart';
 import 'profile_view_model.dart';
+import 'widgets/app_lock_settings_tile.dart';
 import 'widgets/notification_settings_tile.dart';
 
 /// Perfil provisional (pantalla 10). El perfil completo de docs/05 §5.2 llega
@@ -44,7 +48,7 @@ class ProfileScreen extends ConsumerWidget {
       if (count == null) return;
       final confirmed = await showAppConfirmDialog(
         context,
-        title: '¿Cerrar sesión sin sincronizar?',
+        title: unsyncedSignOutTitle,
         message: unsyncedSignOutMessage(count),
         confirmLabel: 'Cerrar sesión',
         destructive: true,
@@ -57,15 +61,18 @@ class ProfileScreen extends ConsumerWidget {
     });
 
     Future<void> confirmSignOut() async {
-      final confirmed = await showAppConfirmDialog(
+      final choice = await showSignOutDialog(
         context,
-        title: '¿Cerrar sesión?',
-        message:
-            'Para volver a entrar necesitarás tu correo y tu contraseña. Tus '
-            'datos se borrarán de este celular.',
-        confirmLabel: 'Cerrar sesión',
+        canKeepSession: ref.read(appLockProvider).canKeepSession,
       );
-      if (confirmed) await viewModel.signOut();
+      switch (choice) {
+        case SignOutChoice.keep:
+          await viewModel.park();
+        case SignOutChoice.wipe:
+          await viewModel.signOut();
+        case SignOutChoice.cancel:
+          break;
+      }
     }
 
     Future<void> confirmDeleteAccount() async {
@@ -137,6 +144,8 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             const NotificationSettingsTile(),
+            const SizedBox(height: AppSpacing.sm),
+            const AppLockSettingsTile(),
             const SizedBox(height: AppSpacing.xl),
             AppSecondaryButton(
               label: state.isSigningOut ? 'Cerrando sesión…' : 'Cerrar sesión',
@@ -171,15 +180,6 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 }
-
-/// "Tienes 3 cambios sin sincronizar…".
-String unsyncedSignOutMessage(int count) => count == 1
-    ? 'Tienes 1 cambio sin sincronizar. Si cierras sesión ahora, se perderá.'
-    : 'Tienes $count cambios sin sincronizar. Si cierras sesión ahora, se '
-          'perderán.';
-
-/// "1 cambio" / "3 cambios".
-String changesLabel(int count) => count == 1 ? '1 cambio' : '$count cambios';
 
 /// Tarjeta de estado de la sincronización (docs/05 pantalla 10, RF-47):
 /// "Datos sincronizados hace 5 min" o "Sin conexión, 3 cambios pendientes".

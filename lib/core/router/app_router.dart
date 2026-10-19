@@ -19,6 +19,7 @@ import '../../features/movements/presentation/new_movement_screen.dart';
 import '../../features/movements/presentation/receipt/receipt_capture.dart';
 import '../../features/movements/presentation/receipt/receipt_capture_screen.dart';
 import '../../features/onboarding/presentation/welcome_screen.dart';
+import '../../features/profile/presentation/app_lock/enable_app_lock_screen.dart';
 import '../../features/profile/presentation/delete_account_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
@@ -175,6 +176,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.deleteAccount,
         builder: (context, state) => const DeleteAccountScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.appLock,
+        builder: (context, state) => const EnableAppLockScreen(),
       ),
       GoRoute(
         path: AppRoutes.budgets,

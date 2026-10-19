@@ -5,12 +5,16 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../../core/security/external_activity_tracker.dart';
 import '../../domain/repositories/receipt_capture_services.dart';
 import 'receipt_capture_settings.dart';
 
-/// Permiso de cámara con permission_handler (docs/07 §7.9).
+/// Permiso de cámara con permission_handler (docs/07 §7.9). El diálogo de
+/// permisos y los Ajustes no bloquean la app al volver (docs/07 §7.7).
 class PermissionHandlerCameraPermission implements CameraPermissionService {
-  const PermissionHandlerCameraPermission();
+  const PermissionHandlerCameraPermission(this._tracker);
+
+  final ExternalActivityTracker _tracker;
 
   @override
   Future<CameraPermissionStatus> status() async =>
@@ -18,10 +22,13 @@ class PermissionHandlerCameraPermission implements CameraPermissionService {
 
   @override
   Future<CameraPermissionStatus> request() async =>
-      _map(await Permission.camera.request());
+      _map(await _tracker.run(Permission.camera.request));
 
   @override
-  Future<bool> openSettings() => openAppSettings();
+  Future<bool> openSettings() {
+    _tracker.markLeavingForSettings();
+    return openAppSettings();
+  }
 
   static CameraPermissionStatus _map(PermissionStatus status) =>
       switch (status) {
@@ -36,22 +43,26 @@ class PermissionHandlerCameraPermission implements CameraPermissionService {
 }
 
 /// Selector de fotos del sistema con image_picker (docs/07 §7.2): la app solo
-/// recibe la imagen elegida y no necesita permiso de la galería.
+/// recibe la imagen elegida y no necesita permiso de la galería. Volver de la
+/// galería no bloquea la app (docs/07 §7.7).
 class ImagePickerReceiptPicker implements ReceiptImagePicker {
-  ImagePickerReceiptPicker({ImagePicker? picker})
+  ImagePickerReceiptPicker(this._tracker, {ImagePicker? picker})
     : _picker = picker ?? ImagePicker();
 
+  final ExternalActivityTracker _tracker;
   final ImagePicker _picker;
 
   @override
   Future<String?> pickFromGallery() async {
-    final file = await _picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: receiptGalleryMaxSide,
-      maxHeight: receiptGalleryMaxSide,
-      imageQuality: receiptGalleryQuality,
-      // Sin metadatos: en iOS no pide el permiso de la biblioteca.
-      requestFullMetadata: false,
+    final file = await _tracker.run(
+      () => _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: receiptGalleryMaxSide,
+        maxHeight: receiptGalleryMaxSide,
+        imageQuality: receiptGalleryQuality,
+        // Sin metadatos: en iOS no pide el permiso de la biblioteca.
+        requestFullMetadata: false,
+      ),
     );
     if (file == null) return null;
     await _deleteOriginalCopy(file.path);

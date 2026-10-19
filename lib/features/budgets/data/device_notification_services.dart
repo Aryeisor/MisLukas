@@ -2,13 +2,18 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/notifications/local_notifications.dart';
 import '../../../core/router/app_routes.dart';
+import '../../../core/security/external_activity_tracker.dart';
 import '../domain/entities/budget_alert_notice.dart';
 import '../domain/repositories/notification_services.dart';
 
-/// Permiso de notificaciones con permission_handler (docs/07 §7.9).
+/// Permiso de notificaciones con permission_handler (docs/07 §7.9). El
+/// diálogo de permisos y los Ajustes no bloquean la app al volver (docs/07
+/// §7.7).
 class PermissionHandlerNotificationPermission
     implements NotificationPermissionService {
-  const PermissionHandlerNotificationPermission();
+  const PermissionHandlerNotificationPermission(this._tracker);
+
+  final ExternalActivityTracker _tracker;
 
   @override
   Future<NotificationPermissionStatus> status() async =>
@@ -16,10 +21,13 @@ class PermissionHandlerNotificationPermission
 
   @override
   Future<NotificationPermissionStatus> request() async =>
-      _map(await Permission.notification.request());
+      _map(await _tracker.run(Permission.notification.request));
 
   @override
-  Future<bool> openSettings() => openAppSettings();
+  Future<bool> openSettings() {
+    _tracker.markLeavingForSettings();
+    return openAppSettings();
+  }
 
   static NotificationPermissionStatus _map(PermissionStatus status) =>
       switch (status) {

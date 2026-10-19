@@ -45,7 +45,7 @@ Existen muchas aplicaciones de finanzas personales. MisLukas no pretende competi
 
 **Funciona sin internet.** Toda la información se guarda primero en el dispositivo y se sincroniza cuando hay conexión. El usuario puede registrar un gasto en el bus, en un sótano o con los datos agotados, y la aplicación responde igual de rápido. En un contexto donde la conexión móvil no siempre es estable ni ilimitada, esto no es un detalle menor.
 
-**Protección de datos sensibles.** La información financiera revela hábitos, ingresos y lugares frecuentados. MisLukas no pide conectar cuentas bancarias, cifra la base de datos local, protege el acceso con biometría o PIN y restringe en el servidor que cada usuario solo acceda a su propia información. La sección 8 desarrolla estas medidas.
+**Protección de datos sensibles.** La información financiera revela hábitos, ingresos y lugares frecuentados. MisLukas no pide conectar cuentas bancarias, cifra la base de datos local, protege el acceso con el bloqueo del propio celular (huella, rostro o el PIN del sistema) y restringe en el servidor que cada usuario solo acceda a su propia información. La sección 8 desarrolla estas medidas.
 
 ## 2.3 Análisis de aplicaciones similares
 

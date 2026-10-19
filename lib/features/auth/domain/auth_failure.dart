@@ -25,6 +25,10 @@ enum AuthFailure {
   /// Sin conexión o el servidor no respondió.
   network,
 
+  /// El servidor rechazó la sesión guardada (vencida, revocada o la cuenta ya
+  /// no existe): hay que entrar con correo y contraseña.
+  sessionExpired,
+
   /// Cualquier otro error.
   unknown,
 }

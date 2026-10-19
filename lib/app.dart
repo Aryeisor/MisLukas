@@ -5,6 +5,8 @@ import 'core/config/app_localization.dart';
 import 'core/router/app_router.dart';
 import 'core/sync/sync_controller.dart';
 import 'core/theme/app_theme.dart';
+import 'features/auth/presentation/app_lock/app_lock_gate.dart';
+import 'features/auth/presentation/app_lock/app_lock_offer_launcher.dart';
 import 'features/auth/presentation/widgets/foreign_data_prompt.dart';
 import 'features/budgets/presentation/budget_alert_notification_controller.dart';
 import 'features/budgets/presentation/budget_carry_over_controller.dart';
@@ -25,10 +27,16 @@ class MisLukasApp extends ConsumerWidget {
       supportedLocales: appSupportedLocales,
       localizationsDelegates: appLocalizationsDelegates,
       routerConfig: ref.watch(appRouterProvider),
-      builder: (context, child) => ForeignDataPrompt(
-        child: WelcomeLauncher(
-          child: NotificationTapLauncher(
-            child: SyncTriggers(child: child ?? const SizedBox.shrink()),
+      // El bloqueo va por fuera de todo: tapa las pantallas y los diálogos
+      // de los avisos de abajo, que además esperan al desbloqueo.
+      builder: (context, child) => AppLockGate(
+        child: ForeignDataPrompt(
+          child: WelcomeLauncher(
+            child: NotificationTapLauncher(
+              child: AppLockOfferLauncher(
+                child: SyncTriggers(child: child ?? const SizedBox.shrink()),
+              ),
+            ),
           ),
         ),
       ),

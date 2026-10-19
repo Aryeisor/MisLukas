@@ -471,7 +471,7 @@ Se añaden dos reglas complementarias:
 
 | Funcionalidad                              | Sin conexión | Motivo                                                                      |
 | ------------------------------------------ | ------------ | --------------------------------------------------------------------------- |
-| Desbloquear la app con biometría o PIN     | Sí           | Se valida en el dispositivo                                                 |
+| Desbloquear la app con el bloqueo del celular | Sí           | Se valida en el dispositivo                                                 |
 | Ver disponible, movimientos y alertas      | Sí           | Datos en la base local                                                      |
 | Registrar gasto por foto (incluido el OCR) | Sí           | ML Kit procesa en el dispositivo                                            |
 | Registrar gasto o ingreso manual           | Sí           | Se guarda localmente como pendiente                                         |
@@ -586,7 +586,7 @@ class AuthGate extends ConsumerWidget {
       error: (_, __) => const LoginScreen(),
       data: (state) => state.session == null
           ? const LoginScreen()      // Sin sesión: inicio de sesión / registro
-          : const UnlockScreen(),    // Con sesión: desbloqueo biométrico o PIN
+          : const UnlockScreen(),    // Con sesión: bloqueo del celular
     );
   }
 }

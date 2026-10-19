@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mislukas/core/database/app_database.dart';
 import 'package:mislukas/core/database/database_connection.dart';
 import 'package:mislukas/core/database/local_data_wiper.dart';
+import 'package:mislukas/core/security/app_lock_store.dart';
 import 'package:mislukas/core/security/database_key_store.dart';
 import 'package:mislukas/core/security/device_session_store.dart';
 import 'package:mislukas/core/security/receipt_key_store.dart';
@@ -28,51 +29,63 @@ void main() {
     if (await directory.exists()) await directory.delete(recursive: true);
   });
 
-  test('cierra la base y borra archivos, recibos, claves y dueño', () async {
-    const storage = FlutterSecureStorage();
-    final keyStore = DatabaseKeyStore(storage);
-    final receiptKeyStore = ReceiptKeyStore(storage);
-    const sessionStore = SecureDeviceSessionStore(storage);
-    final firstKey = await keyStore.getOrCreateKey();
-    final firstReceiptKey = await receiptKeyStore.getOrCreateKey();
-    await sessionStore.writeOwner('usuario-1');
+  test(
+    'cierra la base y borra archivos, recibos, claves, dueño, sesión en '
+    'espera y la preferencia de ingreso con el bloqueo del celular',
+    () async {
+      const storage = FlutterSecureStorage();
+      final keyStore = DatabaseKeyStore(storage);
+      final receiptKeyStore = ReceiptKeyStore(storage);
+      const sessionStore = SecureDeviceSessionStore(storage);
+      final firstKey = await keyStore.getOrCreateKey();
+      final firstReceiptKey = await receiptKeyStore.getOrCreateKey();
+      await sessionStore.writeOwner('usuario-1');
+      await sessionStore.writeParkedUser('usuario-1');
+      await const SecureAppLockStore(storage).writeEnabled(true);
 
-    for (final name in FileLocalDataWiper.databaseFiles) {
-      await File(p.join(directory.path, name)).writeAsString('datos');
-    }
-    final receipts = Directory(p.join(directory.path, receiptsDirectoryName));
-    await File(p.join(receipts.path, 'r1.enc')).create(recursive: true);
-    await File(p.join(receipts.path, 'tmp', 'r2.jpg')).create(recursive: true);
-    final other = File(p.join(directory.path, 'otro.txt'))
-      ..writeAsStringSync('no se toca');
+      for (final name in FileLocalDataWiper.databaseFiles) {
+        await File(p.join(directory.path, name)).writeAsString('datos');
+      }
+      final receipts = Directory(p.join(directory.path, receiptsDirectoryName));
+      await File(p.join(receipts.path, 'r1.enc')).create(recursive: true);
+      await File(p.join(receipts.path, 'tmp', 'r2.jpg'))
+          .create(recursive: true);
+      final other = File(p.join(directory.path, 'otro.txt'))
+        ..writeAsStringSync('no se toca');
 
-    final events = <String>[];
-    final wiper = FileLocalDataWiper(
-      closeDatabase: () async => events.add('close'),
-      directory: () async => directory,
-      keyStore: keyStore,
-      receiptKeyStore: receiptKeyStore,
-      sessionStore: sessionStore,
-      onWiped: () => events.add('wiped'),
-      cancelNotifications: () async => events.add('notifications'),
-    );
+      final events = <String>[];
+      final wiper = FileLocalDataWiper(
+        closeDatabase: () async => events.add('close'),
+        directory: () async => directory,
+        keyStore: keyStore,
+        receiptKeyStore: receiptKeyStore,
+        sessionStore: sessionStore,
+        appLockStore: const SecureAppLockStore(FlutterSecureStorage()),
+        onWiped: () => events.add('wiped'),
+        cancelNotifications: () async => events.add('notifications'),
+      );
 
-    await wiper.wipe();
+      await wiper.wipe();
 
-    expect(events, ['notifications', 'close', 'wiped']);
-    for (final name in FileLocalDataWiper.databaseFiles) {
-      expect(File(p.join(directory.path, name)).existsSync(), isFalse);
-    }
-    expect(receipts.existsSync(), isFalse);
-    expect(other.existsSync(), isTrue);
-    expect(await storage.read(key: DatabaseKeyStore.storageKey), isNull);
-    expect(await storage.read(key: ReceiptKeyStore.storageKey), isNull);
-    expect(await receiptKeyStore.readKey(), isNull);
-    expect(await sessionStore.readOwner(), isNull);
-    // La próxima base y las próximas imágenes usan claves nuevas.
-    expect(await keyStore.getOrCreateKey(), isNot(firstKey));
-    expect(await receiptKeyStore.getOrCreateKey(), isNot(firstReceiptKey));
-  });
+      expect(events, ['notifications', 'close', 'wiped']);
+      for (final name in FileLocalDataWiper.databaseFiles) {
+        expect(File(p.join(directory.path, name)).existsSync(), isFalse);
+      }
+      expect(receipts.existsSync(), isFalse);
+      expect(other.existsSync(), isTrue);
+      expect(await storage.read(key: DatabaseKeyStore.storageKey), isNull);
+      expect(await storage.read(key: ReceiptKeyStore.storageKey), isNull);
+      expect(await receiptKeyStore.readKey(), isNull);
+      expect(await sessionStore.readOwner(), isNull);
+      expect(await sessionStore.readParkedUser(), isNull);
+      // La preferencia acompaña a los datos: quien entre después no la
+      // hereda (docs/08 §8.8.4).
+      expect(await const SecureAppLockStore(storage).readEnabled(), isFalse);
+      // La próxima base y las próximas imágenes usan claves nuevas.
+      expect(await keyStore.getOrCreateKey(), isNot(firstKey));
+      expect(await receiptKeyStore.getOrCreateKey(), isNot(firstReceiptKey));
+    },
+  );
 
   test('la marca de la bienvenida se va con el archivo de la base', () async {
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -87,6 +100,7 @@ void main() {
       keyStore: DatabaseKeyStore(const FlutterSecureStorage()),
       receiptKeyStore: ReceiptKeyStore(const FlutterSecureStorage()),
       sessionStore: const SecureDeviceSessionStore(FlutterSecureStorage()),
+      appLockStore: const SecureAppLockStore(FlutterSecureStorage()),
       onWiped: () {},
     ).wipe();
 
@@ -112,6 +126,7 @@ void main() {
       keyStore: DatabaseKeyStore(const FlutterSecureStorage()),
       receiptKeyStore: ReceiptKeyStore(const FlutterSecureStorage()),
       sessionStore: const SecureDeviceSessionStore(FlutterSecureStorage()),
+      appLockStore: const SecureAppLockStore(FlutterSecureStorage()),
       onWiped: () {},
     ).wipe();
 
@@ -129,6 +144,7 @@ void main() {
       keyStore: DatabaseKeyStore(const FlutterSecureStorage()),
       receiptKeyStore: ReceiptKeyStore(const FlutterSecureStorage()),
       sessionStore: const SecureDeviceSessionStore(FlutterSecureStorage()),
+      appLockStore: const SecureAppLockStore(FlutterSecureStorage()),
       onWiped: () => wiped = true,
       cancelNotifications: () async => throw StateError('sin plugin'),
     ).wipe();
@@ -142,6 +158,7 @@ void main() {
       keyStore: DatabaseKeyStore(const FlutterSecureStorage()),
       receiptKeyStore: ReceiptKeyStore(const FlutterSecureStorage()),
       sessionStore: const SecureDeviceSessionStore(FlutterSecureStorage()),
+      appLockStore: const SecureAppLockStore(FlutterSecureStorage()),
       onWiped: () {},
     );
     await wiper.wipe();
@@ -164,6 +181,7 @@ void main() {
         keyStore: keyStore,
         receiptKeyStore: ReceiptKeyStore(const FlutterSecureStorage()),
         sessionStore: sessionStore,
+        appLockStore: const SecureAppLockStore(FlutterSecureStorage()),
         onWiped: () => wiped = true,
       ).wipe();
 
@@ -193,6 +211,7 @@ void main() {
         keyStore: keyStore,
         receiptKeyStore: ReceiptKeyStore(const FlutterSecureStorage()),
         sessionStore: sessionStore,
+        appLockStore: const SecureAppLockStore(FlutterSecureStorage()),
         onWiped: () {},
       ).wipe();
 
