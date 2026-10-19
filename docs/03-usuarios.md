@@ -96,7 +96,7 @@ Camila entra al simulador y ve que ahorra en promedio \$420.000 al mes. Mueve el
 
 **Escenario 6: Cambiar de celular.**
 
-A Camila le roban el celular. Compra uno nuevo, instala MisLukas e inicia sesión con su correo y contraseña. Sus movimientos, categorías y presupuestos se descargan desde la nube. Como la base de datos del celular robado está cifrada y protegida con biometría, quien lo tenga no puede ver su información financiera.
+A Camila le roban el celular. Compra uno nuevo, instala MisLukas e inicia sesión con su correo y contraseña. Sus movimientos, categorías y presupuestos se descargan desde la nube. Como la base de datos del celular robado está cifrada y la app está protegida con el bloqueo del celular, quien lo tenga no puede ver su información financiera.
 
 **Escenario 7: Olvidar la contraseña.**
 
@@ -139,14 +139,16 @@ Criterios de aceptación:
 - **Dado** que recibí un código, **cuando** lo ingreso después de su tiempo de expiración, **entonces** el sistema lo rechaza y me permite solicitar uno nuevo.
 - **Dado** que creo una nueva contraseña válida, **cuando** la guardo, **entonces** se cierran las sesiones activas en mis otros dispositivos.
 
-**HU-04 · Desbloqueo con biometría** · Prioridad: Should
+**HU-04 · Desbloqueo con el bloqueo del celular** · Prioridad: Should
 
-Como usuario con sesión activa, quiero desbloquear la aplicación con mi huella o mi rostro, para entrar rápido sin exponer mis datos si alguien toma mi celular.
+Como usuario con sesión activa, quiero desbloquear la aplicación con el mismo bloqueo de mi celular (huella, rostro o el PIN, patrón o contraseña del sistema), para entrar rápido sin exponer mis datos si alguien toma mi celular y sin tener que recordar otra clave.
 
 Criterios de aceptación:
 
-- **Dado** que activé la biometría, **cuando** abro la aplicación, **entonces** se solicita la huella o el reconocimiento facial antes de mostrar cualquier información.
-- **Dado** que la biometría falla o no está disponible, **cuando** elijo "Usar PIN", **entonces** puedo desbloquear con mi PIN de cuatro dígitos.
+- **Dado** que activé el bloqueo, **cuando** abro la aplicación o vuelvo a ella después de cinco minutos, **entonces** se muestra el diálogo de desbloqueo del sistema antes de mostrar cualquier información.
+- **Dado** que la huella o el rostro fallan o no están configurados, **cuando** sigo en el mismo diálogo del sistema, **entonces** puedo desbloquear con el PIN, patrón o contraseña de mi celular.
+- **Dado** que no puedo desbloquear, **cuando** elijo "Cerrar sesión" › "Cerrar sesión y borrar los datos de este celular", **entonces** salgo de la cuenta y los datos se borran del celular.
+- **Dado** que activé "Ingresar con huella, rostro o PIN" y cerré sesión, **cuando** toco ese botón en el inicio de sesión y paso el diálogo del sistema, **entonces** entro a Inicio sin escribir mi contraseña y con mis datos intactos.
 
 **Módulo de movimientos**
 

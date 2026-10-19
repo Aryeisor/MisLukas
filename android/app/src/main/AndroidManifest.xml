@@ -1,4 +1,43 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Supabase: autenticación y sincronización. Solo estaba en los
+         manifiestos de debug y profile (docs/07 §7.9.2). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Detectar cambios de red para sincronizar (connectivity_plus). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Alertas de presupuesto en Android 13 o superior. Se pide al guardar
+         un presupuesto, nunca al abrir la app (docs/07 §7.9). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Foto del recibo (docs/07 §7.9). El permiso se pide al usarla. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Bloqueo de la app con el bloqueo del celular (local_auth, docs/07
+         §7.7): huella o rostro, o el PIN, patrón o contraseña del sistema.
+         Es un permiso normal, sin diálogo. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- La app funciona sin cámara (galería o registro manual): no se exige
+         en la tienda. camera_android_camerax la declara obligatoria. -->
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false"
+        tools:replace="android:required" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+    <!-- camera_android_camerax los declara para grabar video y guardar en la
+         galería; MisLukas no usa el micrófono ni guarda fotos fuera de su
+         almacenamiento privado (docs/07 §7.1, §7.9.1). -->
+    <uses-permission
+        android:name="android.permission.RECORD_AUDIO"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        tools:node="remove" />
+    <!-- El combinador de manifiestos lo agrega como implícito de
+         WRITE_EXTERNAL_STORAGE. La galería usa el selector del sistema, que
+         no necesita permiso (docs/07 §7.2). -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        tools:node="remove" />
     <application
         android:label="MisLukas"
         android:name="${applicationName}"

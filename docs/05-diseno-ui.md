@@ -11,7 +11,7 @@ La navegación de MisLukas se organiza en tres bloques: el acceso, que decide si
 **Decisión al abrir la aplicación.** Cada vez que el usuario abre MisLukas, la aplicación revisa si existe una sesión guardada en el almacenamiento seguro del dispositivo:
 
 - **Si no hay sesión**, muestra la pantalla de inicio de sesión y registro.
-- **Si hay sesión**, muestra la pantalla de desbloqueo con huella, rostro o PIN. Solo después de desbloquear se muestra información financiera.
+- **Si hay sesión** y el usuario activó el bloqueo, muestra la pantalla de desbloqueo y el diálogo del bloqueo del celular (huella, rostro o el PIN, patrón o contraseña del sistema). Solo después de desbloquear se muestra información financiera.
 
 Esta decisión evita dos problemas opuestos: pedir la contraseña cada vez, lo que haría la app incómoda, y abrirla directamente, lo que expondría los datos a cualquiera que tome el celular.
 
@@ -29,7 +29,8 @@ Esta decisión evita dos problemas opuestos: pedir la contraseña cada vez, lo q
 flowchart TD
     A(["Abrir MisLukas"]) --> B{"¿Hay sesión guardada?"}
     B -- "No" --> C["Inicio de sesión / Registro"]
-    B -- "Sí" --> D["Desbloqueo: huella, rostro o PIN"]
+    B -- "Sí" --> D["Desbloqueo con el bloqueo del celular"]
+    B -- "Sí, en espera (cerró sesión con el ajuste activo)" --> C
     C -- "Registrarse" --> C2["Verifica tu correo"]
     C2 --> C
     C -- "¿Olvidaste tu contraseña?" --> R1["Recuperar: ingresar correo"]
@@ -37,8 +38,9 @@ flowchart TD
     R2 --> R3["Recuperar: nueva contraseña"]
     R3 --> C
     C -- "Iniciar sesión" --> E["Inicio"]
+    C -- "Ingresar con huella, rostro o PIN" --> E
     D -- "Desbloqueo correcto" --> E
-    D -- "Cerrar sesión" --> C
+    D -- "¿No eres tú? Cerrar sesión" --> C
     E -. "Usuario nuevo, después de sincronizar" .-> W1["Bienvenida: ingresos del mes"]
     W1 -- "Continuar u Omitir" --> W2["Bienvenida: presupuestos"]
     W2 -- "Guardar u Omitir" --> E
@@ -91,11 +93,13 @@ _Figura 5.2. Captura de la pantalla de inicio de sesión_
 - Campo **CONTRASEÑA** con un ícono de ojo para mostrar u ocultar lo escrito.
 - Enlace "¿Olvidaste tu contraseña?" en azul, ubicado a la altura de la etiqueta del campo de contraseña, justo donde el usuario lo busca cuando no la recuerda.
 - Botón principal "Iniciar sesión" en color oscuro y de ancho completo.
-- Separador "o continúa con" y dos botones, "Continuar con Google" y "Continuar con Apple", deshabilitados y marcados con la etiqueta "Próximamente".
+- Debajo de "Iniciar sesión", la sección de otras formas de entrar: un separador "o" y, uno debajo del otro, sus botones secundarios. En el MVP tiene uno solo, **"Ingresar con huella, rostro o PIN"** (ícono de huella), que aparece solo si el ajuste del mismo nombre está activo en este celular, hay una sesión guardada en espera y el celular tiene bloqueo de pantalla. Al tocarlo se abre el diálogo del sistema y, si es correcto, se entra a Inicio sin contraseña. "Continuar con Google" y "Continuar con Apple" se agregarán después en esta misma sección. Sin opciones, la sección no ocupa espacio.
+- Avisos de esa sección: "Tu sesión expiró. Ingresa con tu correo y contraseña." si el servidor rechazó la sesión guardada (el botón desaparece), y los mismos del desbloqueo si el usuario cancela o el sistema pausó los intentos.
 
 **Acciones.**
 
 - Iniciar sesión con correo y contraseña.
+- Volver a entrar con el bloqueo del celular, si la sesión quedó guardada.
 - Mostrar u ocultar la contraseña.
 - Ir al formulario de registro o al flujo de recuperación de contraseña.
 
@@ -146,11 +150,12 @@ Al terminar, una pantalla de confirmación informa que la contraseña se actuali
 **Especificación.**
 
 - Saludo personalizado ("Hola, Camila") y el texto "Desbloquea para ver tus finanzas".
-- Ícono de huella o de rostro en un círculo azul claro, que al tocarse activa la autenticación biométrica del sistema.
-- Botón secundario "Usar PIN", que muestra cuatro indicadores y un teclado numérico grande.
-- Enlace "¿No eres Camila? Cerrar sesión" en la parte inferior.
+- Ícono de candado en un círculo azul claro.
+- Botón principal "Ingresar con huella, rostro o PIN", que vuelve a abrir el diálogo de desbloqueo del sistema. El diálogo se abre solo al llegar a la pantalla.
+- Botón secundario "¿No eres tú? Cerrar sesión", la salida si el usuario no puede desbloquear o no es el dueño de la cuenta. Abre el mismo diálogo del Perfil: "Cerrar sesión" vuelve al inicio de sesión conservando la sesión y los datos, y "Cerrar sesión y borrar los datos de este celular" hace el borrado total.
+- Avisos: "No se desbloqueó. Toca Ingresar con huella, rostro o PIN para intentarlo de nuevo." si el usuario cancela, y "Tu celular pausó el desbloqueo por varios intentos fallidos…" si el sistema lo bloqueó por intentos.
 
-**Decisiones de diseño.** La pantalla no muestra ningún dato financiero hasta que el desbloqueo es exitoso. El PIN existe como alternativa porque no todos los dispositivos tienen sensor biométrico y porque la biometría puede fallar, por ejemplo, con las manos mojadas o con poca luz.
+**Decisiones de diseño.** La pantalla no muestra ningún dato financiero hasta que el desbloqueo es exitoso. No hay un PIN propio de la app (Fase 6C): el sistema muestra en el mismo diálogo la huella o el rostro si están configurados y, si no, o si fallan, el PIN, patrón o contraseña del celular. Así el usuario no tiene otra clave que recordar, la app no guarda ningún PIN y el control de intentos lo hace el sistema operativo. Todos los textos del bloqueo usan la misma forma: "huella, rostro o PIN".
 
 **B. Principales**
 
@@ -236,6 +241,14 @@ _Figura 5.7. Captura de la variante de registro manual_
 - Campo **NOTA (OPCIONAL)**.
 - Botón "Guardar gasto" con un ícono de documento.
 
+**Implementación con la foto real (Fase 6A).** La pantalla se llena con lo que leyó el OCR (docs/07 §7.3) y difiere del boceto en tres puntos:
+
+- **Vista previa.** Muestra la foto del recibo, descifrada en memoria, sobre el fondo oscuro, con un recuadro azul y la etiqueta "Área detectada" sobre la fila del total. Ya no muestra el NIT ni los productos: la app descarta ese texto (docs/08 §8.9.3). Si el recibo no tiene foto en este celular, muestra "La foto solo está en el celular donde se tomó"; si no se puede descifrar, "No pudimos mostrar la foto del recibo".
+- **Banner según la lectura.** Verde "Recibo leído correctamente" si se encontró el total; amarillo "No encontramos el total. Escribe el valor del gasto." si se leyó el recibo, pero no el total; rojo "No pudimos leer el recibo. Puedes ingresar el valor manualmente." si no se leyó nada. Sin total, el campo se llama VALOR DEL GASTO y aparece vacío; sin categoría sugerida, la sección se llama CATEGORÍA y no trae ninguna marcada.
+- **Campo COMERCIO**, debajo del valor, precargado con el comercio detectado y editable. Se guarda como descripción del movimiento; vacío, se usa el nombre de la categoría. El boceto no lo tiene, pero sin él el usuario no podría corregir el comercio.
+
+Antes de esta pantalla está la captura: el visor de cámara con el marco, la linterna y el acceso a la galería, la revisión de la foto ("Usar foto" / "Repetir") y "Leyendo tu recibo…" mientras corre el OCR. Si no hay permiso de cámara, la captura muestra la explicación previa o cómo habilitarlo, con la galería y el registro manual como alternativas (docs/07 §7.9).
+
 **Variante de registro manual.** Conserva la misma estructura, pero sin el banner ni la vista previa del recibo. El campo cambia a **VALOR DEL GASTO** y aparece vacío, listo para escribir. La fecha también está, con hoy por defecto.
 
 **Edición de un gasto.** Se abre "Editar movimiento" con el valor, la categoría, la fecha y la nota del gasto, y los botones "Guardar cambios" y "Eliminar movimiento". Cambiar la fecha pasa el gasto al mes de la nueva fecha.
@@ -318,10 +331,12 @@ _Figura 5.10. Captura de la parte inferior del simulador._
 - **Tarjeta de estado de sincronización**, por ejemplo "Datos sincronizados hace 5 min" o "Sin conexión, 3 cambios pendientes".
 - **Grupos de opciones:**
   - Cuenta: datos personales y cambio de contraseña.
-  - Seguridad: desbloqueo con huella, bloqueo automático y sesiones activas.
+  - Seguridad: "Ingresar con huella, rostro o PIN" (bloqueo al reabrir la app e ingreso desde el inicio de sesión) y sesiones activas. En el MVP el interruptor está en Preferencias.
   - Preferencias: alertas de presupuesto y categorías. En el MVP tiene el botón "Presupuestos", que abre la pantalla 13.
   - Privacidad: política de tratamiento de datos y términos.
-- **Botón "Cerrar sesión".**
+- **Botón "Cerrar sesión".** Pide confirmar en un diálogo:
+  - Con "Ingresar con huella, rostro o PIN" activo: "Podrás volver a entrar con tu huella, rostro o PIN. Tus datos se quedan guardados y cifrados en este celular." con "Cerrar sesión", "Cerrar sesión y borrar los datos de este celular" (en rojo, pensado para celulares compartidos) y "Cancelar".
+  - Con el ajuste apagado: "Para volver a entrar necesitarás tu correo y tu contraseña. Tus datos se borrarán de este celular." y una sola acción, el borrado total.
 - **Enlace "Eliminar mi cuenta"** en rojo, que abre un diálogo de confirmación explicando que la acción es permanente.
 
 **Decisiones de diseño.** La eliminación de cuenta se ubica al final y en rojo para que sea fácil de encontrar cuando se busca, pero difícil de activar por error. Además de ser una buena práctica, es un requisito de las tiendas de aplicaciones.
@@ -460,7 +475,7 @@ Se usan íconos de línea con un grosor uniforme y esquinas redondeadas, acordes
 | Componente                   | Descripción                                                                                                                        | Dónde se usa                                                      |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | Botón principal              | Fondo oscuro, texto blanco, ancho completo, 48–52 px de alto. Estados: normal, presionado, cargando y deshabilitado (gris).        | Todas las pantallas con una acción principal.                     |
-| Botón secundario             | Fondo blanco con borde gris.                                                                                                       | Google y Apple, Cerrar sesión, Usar PIN.                          |
+| Botón secundario             | Fondo blanco con borde gris.                                                                                                       | Google y Apple, Cerrar sesión.                                    |
 | Campo de texto               | Etiqueta en mayúsculas arriba, fondo blanco, borde gris. Borde azul al enfocar y rojo con mensaje de error cuando hay un problema. | Formularios de autenticación, valor y nota del gasto.             |
 | Tarjeta                      | Fondo blanco, esquinas de 12 px y borde sutil.                                                                                     | Movimientos, reportes, controles del simulador.                   |
 | Tarjeta de movimiento        | Ícono de categoría, nombre, categoría y fecha, y monto a la derecha con color según el tipo.                                       | Inicio e historial.                                               |

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../account_session_controller.dart';
+import '../app_lock/app_lock_controller.dart';
 
 /// Aviso global de "datos de otra cuenta". Se monta una sola vez, encima del
 /// router (MaterialApp.router builder), y abre su diálogo en el navegador
@@ -14,6 +15,9 @@ import '../account_session_controller.dart';
 /// confirmar que se borran antes de abrir la app. No muestra nada de la otra
 /// cuenta. Si el diálogo no se puede mostrar, cierra la sesión con un mensaje:
 /// la app nunca queda con sesión sin poder avanzar ni ver un aviso.
+///
+/// Con la app bloqueada espera al desbloqueo: si la app abre con la sesión de
+/// otra cuenta, el aviso sale después de desbloquear (docs/08 §8.8.2).
 ///
 /// También muestra los avisos de una sola vez de [accountNoticeProvider].
 class ForeignDataPrompt extends ConsumerStatefulWidget {
@@ -41,16 +45,16 @@ class _ForeignDataPromptState extends ConsumerState<ForeignDataPrompt> {
     super.initState();
     // La app pudo abrir ya en este estado.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted &&
-          ref.read(accountSessionProvider) ==
-              AccountSessionStatus.foreignData) {
-        _ask();
-      }
+      if (mounted) _ask();
     });
   }
 
   Future<void> _ask() async {
-    if (_showing) return;
+    if (_showing ||
+        ref.read(accountSessionProvider) != AccountSessionStatus.foreignData ||
+        !ref.read(appLockProvider).contentVisible) {
+      return;
+    }
     final controller = ref.read(accountSessionProvider.notifier);
     final navigatorContext = _navigatorContext;
     if (navigatorContext == null || !navigatorContext.mounted) {
@@ -97,6 +101,9 @@ class _ForeignDataPromptState extends ConsumerState<ForeignDataPrompt> {
           previous != AccountSessionStatus.foreignData) {
         _ask();
       }
+    });
+    ref.listen(appLockProvider.select((s) => s.contentVisible), (_, visible) {
+      if (visible) _ask();
     });
     ref.listen(accountNoticeProvider, (_, notice) {
       if (notice != null) _showNotice(notice);

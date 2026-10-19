@@ -372,14 +372,21 @@ Ambos esquemas comparten las mismas tablas y campos de negocio, pero cumplen fun
 | Usuarios                 | Solo los datos del usuario que inició sesión                           | Datos de todos los usuarios, aislados por RLS                                            |
 | Tabla de usuarios        | No guarda credenciales; solo el perfil                                 | auth.users administrada por Supabase Auth, más perfiles                                  |
 | Campos de sincronización | estado_sync en cada registro: sincronizado, pendiente o error          | sincronizado_en: momento en que el servidor recibió el cambio, asignado por un _trigger_ |
-| Tablas adicionales       | cola_sincronizacion, metadatos_sync (última sincronización por tabla) y ajustes_locales (ajustes de este dispositivo, sin sincronizar) | Ninguna adicional en el MVP                                                              |
+| Tablas adicionales       | cola_sincronizacion, metadatos_sync (última sincronización por tabla) ajustes_locales (ajustes de este dispositivo) y alertas_enviadas (alertas de presupuesto ya registradas), sin sincronizar | Ninguna adicional en el MVP                                                              |
 | Recibos                  | ruta_local: imagen en el celular; nula si llegó de otro dispositivo    | ruta_storage: ubicación en Supabase Storage, solo si el usuario activa el respaldo       |
 | Propietario              | Sin usuario_id: la base pertenece a un solo usuario                    | usuario_id con valor por defecto auth.uid(); el cliente no lo envía                      |
 | Seguridad                | Archivo cifrado completo con SQLite3MultipleCiphers                    | Row Level Security en todas las tablas y cifrado gestionado por Supabase                 |
 | Tipos de datos           | UUID y fechas se guardan como texto; montos como INTEGER               | Tipos nativos uuid, date, timestamptz, bigint                                            |
-| Migraciones              | Gestionadas por Drift al actualizar la app (versión 4 del esquema)     | Scripts SQL versionados en supabase/migrations                                           |
+| Migraciones              | Gestionadas por Drift al actualizar la app (versión 5 del esquema)     | Scripts SQL versionados en supabase/migrations                                           |
 
-La tabla ajustes_locales (clave y valor) guarda decisiones que solo valen para este dispositivo. Por ahora tiene una sola: que la bienvenida de los usuarios nuevos ya se completó, se omitió o no hacía falta (sección 5.2, pantalla 11). Vive en la base cifrada y no se sincroniza, así que se borra junto con los datos locales al cerrar sesión o al entrar otro usuario.
+La tabla ajustes_locales (clave y valor) guarda decisiones que solo valen para este dispositivo y no se sincroniza:
+
+- que la bienvenida de los usuarios nuevos ya se completó, se omitió o no hacía falta (sección 5.2, pantalla 11);
+- desde la Fase 6B, el interruptor de notificaciones de presupuesto, si la explicación previa del permiso ya se mostró y si ya se tomó la línea base de las alertas (docs/07 §7.4).
+
+La tabla alertas_enviadas (versión 5) registra las alertas de presupuesto ya registradas en este dispositivo: una fila por categoría, mes y umbral (75 o 100), para no repetir una notificación (docs/07 §7.4). Tampoco se sincroniza: en otro celular una alerta puede repetirse una vez.
+
+Las dos viven en la base cifrada, así que se borran junto con los datos locales al cerrar sesión o al entrar otro usuario.
 
 El campo sincronizado_en merece una explicación. Los relojes de los celulares no siempre están en hora, por lo que depender solo de la fecha del dispositivo para saber qué cambios descargar podría hacer que algunos se pierdan. Por eso, cuando un registro llega al servidor, un _trigger_ de PostgreSQL le asigna la hora del servidor. Al descargar cambios, la app pide "todo lo modificado en el servidor desde mi última sincronización", usando siempre el reloj del servidor como referencia.
 
@@ -464,7 +471,7 @@ Se añaden dos reglas complementarias:
 
 | Funcionalidad                              | Sin conexión | Motivo                                                                      |
 | ------------------------------------------ | ------------ | --------------------------------------------------------------------------- |
-| Desbloquear la app con biometría o PIN     | Sí           | Se valida en el dispositivo                                                 |
+| Desbloquear la app con el bloqueo del celular | Sí           | Se valida en el dispositivo                                                 |
 | Ver disponible, movimientos y alertas      | Sí           | Datos en la base local                                                      |
 | Registrar gasto por foto (incluido el OCR) | Sí           | ML Kit procesa en el dispositivo                                            |
 | Registrar gasto o ingreso manual           | Sí           | Se guarda localmente como pendiente                                         |
@@ -579,7 +586,7 @@ class AuthGate extends ConsumerWidget {
       error: (_, __) => const LoginScreen(),
       data: (state) => state.session == null
           ? const LoginScreen()      // Sin sesión: inicio de sesión / registro
-          : const UnlockScreen(),    // Con sesión: desbloqueo biométrico o PIN
+          : const UnlockScreen(),    // Con sesión: bloqueo del celular
     );
   }
 }

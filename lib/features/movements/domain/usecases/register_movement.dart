@@ -13,10 +13,14 @@ import '../repositories/movement_repository.dart';
 class ReceiptDraft {
   const ReceiptDraft({
     required this.localPath,
+    this.id,
     this.detectedTotal,
     this.detectedMerchant,
   });
 
+  /// Id del recibo: el de su imagen cifrada (`recibos/<id>.enc`), que se
+  /// genera al capturar la foto. Si es null, se genera uno nuevo.
+  final String? id;
   final String localPath;
   final int? detectedTotal;
   final String? detectedMerchant;
@@ -91,7 +95,7 @@ class RegisterMovement {
       receipt: receipt == null
           ? null
           : Receipt(
-              id: _ids.newId(),
+              id: receipt.id ?? _ids.newId(),
               movementId: movement.id,
               localPath: receipt.localPath,
               detectedTotal: isValidAmount(receipt.detectedTotal)

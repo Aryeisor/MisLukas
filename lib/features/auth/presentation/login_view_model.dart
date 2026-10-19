@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/validators.dart';
 import '../data/auth_providers.dart';
 import '../domain/auth_failure.dart';
+import 'parked_session.dart';
 
 /// Estado inmutable del formulario de inicio de sesión.
 class LoginState {
@@ -113,9 +114,13 @@ class LoginViewModel extends Notifier<LoginState> {
       await ref
           .read(authRepositoryProvider)
           .signIn(email: state.email, password: state.password);
+      // Sin sesión en espera, el router ya llevó a Inicio y este ViewModel se
+      // liberó. Con una de este usuario, entró con su contraseña: la marca
+      // ya no aplica (si era de otra cuenta, ya se borró sola).
       if (!ref.mounted) return;
       _failedAttempts = 0;
       state = state.copyWith(isSubmitting: false);
+      ref.read(parkedSessionProvider.notifier).clear();
     } on AuthFailureException catch (error) {
       if (!ref.mounted) return;
       state = state.copyWith(isSubmitting: false, failure: () => error.failure);

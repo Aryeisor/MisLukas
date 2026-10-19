@@ -20,6 +20,7 @@ La documentación técnica completa está en `docs/`. Es la **fuente de verdad**
 | `docs/06-arquitectura.md` | Stack, capas, modelo de datos, almacenamiento, sincronización, Supabase |
 | `docs/07-funciones-dispositivo.md` | Cámara, OCR, notificaciones, biometría, permisos |
 | `docs/08-seguridad.md` | Autenticación, RLS, inyección SQL, protección local, Ley 1581 |
+| `docs/09-pruebas.md` | Evidencias: verify.sql, pruebas automáticas, pruebas manuales, mediciones y capturas pendientes |
 
 Si el código que vas a escribir contradice la documentación, **no lo resuelvas por tu cuenta**: avísame y explica la diferencia.
 
@@ -43,7 +44,7 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - `AuthRepository` ignora los errores de `onAuthStateChange`: un fallo de red al renovar el token no cierra la sesión. Solo se cierra si el servidor rechaza la sesión.
 - Auth no tiene casos de uso: los ViewModels usan `AuthRepository` y las validaciones están en `core/utils/validators.dart` (incluida la lista local de contraseñas comunes de docs/08 §8.2.4).
 - Después de guardar la contraseña con el código de recuperación se cierra la sesión en todos los dispositivos (`signOut(global)`) y el usuario vuelve a /login. Mientras la recuperación está en curso (`passwordRecoveryInProgressProvider`, se activa antes de verificar el código), el redirect no saca al usuario aunque haya sesión: `/recover` está apilada sobre `/login` y go_router evalúa el redirect con la ruta base (`/login`). La sesión temporal solo se cierra si el usuario sale por su cuenta (Volver o atrás del sistema, `RecoverPasswordViewModel.cancel`), nunca en un dispose.
-- Con sesión, la app entra directo a /home hasta que exista el desbloqueo (Fase 6). La pantalla de verificación recibe el correo en `extra` de go_router y no lo muestra.
+- Con sesión, la app entra a /home; si el bloqueo está activo, `AppLockGate` la cubre hasta desbloquear (6C). La pantalla de verificación recibe el correo en `extra` de go_router y no lo muestra.
 - Al registrarse, los metadatos del usuario llevan `nombre` y `politica_version` ("1"), para que la tabla perfiles los registre en 5B.
 - Esquema remoto en `supabase/migrations/` (001 a 008 de la 5B, 009 de la 5C), ejecutado a mano en el SQL Editor. Cada archivo es una transacción (`begin/commit`) y es repetible. `supabase/verify.sql` comprueba RLS, permisos y aislamiento entre dos usuarios. `supabase/rollback_5b.sql` deshace todo (solo en desarrollo).
 - Las categorías predeterminadas son filas globales en Supabase, con `usuario_id` null y los mismos UUID fijos (docs/06 y docs/08). Es la única columna `usuario_id` nullable. Todos las leen, nadie las modifica y la app no las envía.
@@ -52,7 +53,7 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - `perfiles` se crea con un trigger SECURITY DEFINER en `auth.users`, que rechaza el registro si falta `politica_version`. Guarda `politica_aceptada_en`. El usuario solo puede actualizar `nombre` (grant por columna).
 - El check del tipo de movimiento se llama `movimientos_tipo_check`, para ampliarlo con una migración (por ejemplo, 'saldo_inicial').
 - Bucket privado `recibos`: 5 MB, JPEG y PNG, ruta `{usuario_id}/{recibo_id}.jpg` sin subcarpetas. Hay políticas de select, insert y update; ninguna de delete. `recibos.ruta_storage` debe empezar por la carpeta del dueño.
-- Base local en la versión 4 de Drift. En la v2, `recibos.ruta_local` admite null (un recibo que llega del servidor no trae la imagen) y `Receipt.localPath` es `String?`. En la v3, `cola_sincronizacion` tiene `proximo_intento` y `ultimo_error` (solo el código). En la v4 se agrega `ajustes_locales` (clave, valor): ajustes del dispositivo, sin sincronizar, que se borran con la base.
+- Base local en la versión 5 de Drift. En la v2, `recibos.ruta_local` admite null (un recibo que llega del servidor no trae la imagen) y `Receipt.localPath` es `String?`. En la v3, `cola_sincronizacion` tiene `proximo_intento` y `ultimo_error` (solo el código). En la v4 se agrega `ajustes_locales` (clave, valor): ajustes del dispositivo, sin sincronizar, que se borran con la base. En la v5 (6B) se agrega `alertas_enviadas` (categoria_id, mes, umbral 75/100, enviada_en; PK de las tres primeras), tampoco sincronizada.
 - DTOs remotos (5B) en `features/*/data/remote/`. Convierten entre filas de Drift y JSON de Supabase con `RemoteJson` (`core/sync/remote_json.dart`). `toCompanion()` deja `estado_sync = 'sincronizado'`, y el de recibos no toca `ruta_local`.
 - Sincronización (5C) en `core/sync/`:
   - `SyncService` hace push, luego pull, y otro push si el pull dejó algo en la cola. Solo corre una ejecución a la vez.
@@ -72,9 +73,10 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
   - 2 s después de cada escritura (observa la cola);
   - al volver a primer plano (`SyncTriggers` en `app.dart`);
   - cada 5 min;
-  - sin conexión, con reintentos a 5, 10, 20, 40 y 60 s.
+  - sin conexión, con reintentos a 5, 10, 20, 40 y 60 s;
+  - al recuperar la red (connectivity_plus, 6B), 2 s después del último cambio.
 
-  Sin connectivity_plus (Fase 6), "sin conexión" es el resultado del último intento. `syncAutoTriggersProvider` lo apaga en las pruebas.
+  "Sin conexión" combina las dos señales (ver Señal de conexión, 6B). `syncAutoTriggersProvider` lo apaga en las pruebas.
 - La base local tiene dueño: el id del usuario se guarda en `flutter_secure_storage` (`DeviceSessionStore`). `AccountSessionController` (`features/auth/presentation/`) da el estado `signedOut`, `foreignData`, `wiping` o `ready`. El router solo cuenta la sesión con `ready`.
   - Si entra otro usuario, `ForeignDataPrompt` pide confirmar y se borra todo antes de abrir la base. Hay uno solo, global: está montado en el `builder` de `MaterialApp.router` y abre su diálogo en el navegador raíz (`rootNavigatorKeyProvider`). Así aparece una sola vez después del login, de verificar el registro o en cualquier pantalla. Si no puede mostrarse, cierra la sesión con un mensaje (`accountNoticeProvider`).
   - El borrado (`FileLocalDataWiper`) borra primero la clave y el dueño. Después cierra la base (con tope de 5 s) y borra los archivos; los errores de esos dos pasos se ignoran. Al abrir, una base sin clave guardada se descarta (`deleteStaleDatabase`).
@@ -82,7 +84,7 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
   - Después de un cierre voluntario el dueño se borra en memoria y en el almacenamiento seguro; la siguiente cuenta entra sin aviso. Solo si no se pudo borrar la clave se conserva el dueño, y entonces la siguiente cuenta ve el aviso.
   - Una base sin dueño (de antes de 5C) pasa al usuario que entra.
 - Una sesión revocada sin que el usuario la cierre conserva los datos cifrados (docs/06 §6.6.4, docs/08 §8.2.6).
-- `AccountActions` cierra la sesión: intenta enviar todo (10 s). Si quedan pendientes, el Perfil pide confirmar que se pierden. Luego cierra la sesión y `LocalDataWiper` borra la base (con `-wal`, `-shm` y `-journal`), la carpeta `recibos/`, la clave de cifrado y el dueño. `appDatabaseProvider` se invalida y la próxima base usa una clave nueva.
+- `AccountActions.signOut` es el borrado total (con "Ingresar con huella, rostro o PIN" activo, "Cerrar sesión" normal es `park`, ver 6C): intenta enviar todo (10 s). Si quedan pendientes, el Perfil pide confirmar que se pierden. Luego cierra la sesión y `LocalDataWiper` borra la base (con `-wal`, `-shm` y `-journal`), la carpeta `recibos/`, las claves de cifrado, el dueño, la sesión en espera y la preferencia de ingreso con el bloqueo del celular. `appDatabaseProvider` se invalida y la próxima base usa una clave nueva.
 - La marca de recuperación en curso también se guarda en el almacenamiento seguro. Si la app se cerró después de verificar el código, `main()` cierra esa sesión temporal antes de abrir la base (`clearInterruptedRecovery`).
 - Eliminación de cuenta (5C), sin Edge Function ni service_role:
   - La app verifica de nuevo la contraseña (`AuthRepository.reauthenticate`).
@@ -122,6 +124,93 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
   - Si dos celulares copian el mismo mes sin conexión, la resolución de "único entre activos" de la 5C deja uno por categoría; las copias perdedoras quedan como lápidas y no se vuelve a copiar.
   - Las alertas no cambian: se evalúan con los presupuestos y gastos de cada mes, así que el mes nuevo empieza sin alertas.
 - Fecha del gasto (5E, RF-19): `MovementDateField` (`movements/presentation/widgets/`) es el selector de fecha del ingreso y del gasto (AppFieldLabel + AppSecondaryButton + `showDatePicker` con `lastDate` = hoy). El gasto (foto, manual y edición) empieza con hoy (`ConfirmMovementState.date`) y se guarda con `RegisterMovement`/`UpdateMovement(date)`. Disponible, Reportes, alertas y simulador ya filtran por `fecha`. En Supabase no hay check de fecha futura (tampoco para el ingreso de la 5D): la validación es solo del cliente.
+- Foto del recibo (6A, RF-14 a RF-18):
+  - Visor propio con `camera` (docs/07 §7.1) en `/movements/new/receipt` (`ReceiptCaptureScreen`, `movements/presentation/receipt/`). Galería con `image_picker`, sin "Usar foto" / "Repetir". "Continuar" con foto abre la captura; al terminar, `pushReplacement` a `/movements/confirm` con `ReceiptCapture` en `extra`. Sin `extra`, `?method=photo` redirige a la captura y sin `method` es el registro manual.
+  - Calidad en `receipt_capture_settings.dart`: cámara `ResolutionPreset.veryHigh` (1080p), JPEG, `enableAudio: false`; galería 1920 px, calidad 85, `requestFullMetadata: false`. Sin paquete de compresión. Más de 5 MB → "La imagen es muy grande".
+  - Permiso con `permission_handler` (`CameraPermissionService`): explicación previa, negado, negado permanente (Ajustes; se revisa de nuevo al volver a primer plano) y bloqueado. Siempre se ofrece galería o registro manual.
+  - OCR con `google_mlkit_text_recognition` (latino, modelo incluido) detrás de `ReceiptTextReader`. `ReceiptParser` (`movements/domain/receipt/`, Dart puro) agrupa las líneas en filas por su ubicación y extrae total (palabras clave con prioridad y exclusiones; con empate, la fila más abajo), comercio (diccionario `merchant_dictionary.dart` o primera fila válida), fecha (día antes que mes; futura, inválida o anterior a 2000 → hoy) y categoría (RF-16).
+  - Sin palabra clave de total, el valor queda vacío: no se propone el número más alto (se quitó de docs/07).
+  - `ScanReceipt` nunca falla: un error del OCR es `ReceiptScanStatus.empty`. Estados: `complete` (hay total, banner verde), `partial` (texto sin total, amarillo) y `empty` (rojo).
+  - `ConfirmMovementMode`: `CreateManualMovementMode` y `CreatePhotoMovementMode(ReceiptCapture)` (reemplazan a `CreateMovementMode(method)`). En la variante foto hay un campo COMERCIO (no está en el boceto 5.6) que se guarda como descripción. `ReceiptDraft` lleva el `id` del recibo (el de su archivo); `total_detectado` y `comercio_detectado` guardan lo leído, aunque el usuario lo corrija.
+- Imágenes de recibos cifradas (6A, docs/07 §7.5):
+  - AES-256-GCM con `cryptography` + `cryptography_flutter` (nativo: javax.crypto / CryptoKit; se registra solo, sin `enable()`). Clave propia de 32 bytes en `ReceiptKeyStore` (`core/security/`, `mislukas.receipt_key`), distinta de la de la base; creación idempotente y serializada. El wiper la borra junto con la de la base.
+  - `FileReceiptImageStore`: `recibos/tmp/<id>.<ext>` sin cifrar solo mientras corre el OCR; `recibos/<id>.enc` = nonce (12) ‖ cifrado ‖ MAC (16), con el id del recibo como dato asociado y escritura atómica. `ruta_local` es relativa (`recibos/<id>.enc`). El temporal se borra en un `finally`, al repetir, al salir y si algo falla. Solo cifra o borra archivos dentro de `recibos/tmp/`.
+  - La vista previa descifra en memoria (`receiptImageProvider`, nunca lanza) y usa `Image.memory`. `ReceiptImage`: `available`, `notOnDevice` ("La foto solo está en el celular donde se tomó") o `unreadable` ("No pudimos mostrar la foto del recibo").
+  - `receiptDraftsInProgressProvider` registra el recibo desde la foto hasta que se guarda o se descarta. `ReceiptCleanupController` (en `SyncTriggers`) corre `CleanReceiptImages` una sola vez por arranque, cuando la sesión queda `ready`, sin tocar los recibos en curso; también limpia lo que la cámara (`CAP*.jpg`) y image_picker (`scaled_*`, `<uuid>/`) dejan en la caché. Salir de Confirma los datos sin guardar borra el `.enc`; eliminar un movimiento borra su imagen.
+  - "Medir cifrado de recibos" (`ReceiptCipherBenchmarkAction`, `core/widgets/dev/`) se muestra en el Perfil con `!kReleaseMode` (también en `--profile`); el criterio es ≤ 300 ms entre cifrar y descifrar 1 MB.
+  - Medición en el Galaxy J4 (armeabi-v7a, `--profile`, mediana de 10 corridas con 1 MB): cifrar 48 ms, descifrar 54 ms, total 102 ms. El OCR no mostró retardo perceptible, así que se mantiene 1080p. Evidencias de pruebas en `docs/09-pruebas.md`.
+  - `ReceiptParser` evalúa palabras clave, exclusiones y fechas por línea de ML Kit (`ReceiptRow.lines`, `ReceiptLine`), no por fila visual: el texto de otro papel a la misma altura no descarta la fila ni aporta su monto. El visor dice "Ubica el recibo dentro del marco, sobre una superficie lisa y sin otros papeles" (`ReceiptFrameHint`).
+  - Respaldo en Storage pendiente: `ruta_storage` sigue en null, la foto solo vive en el celular donde se tomó. Eliminar solo la foto (docs/08 §8.9.3) también queda pendiente.
+- Android (6A): el manifiesto declara `CAMERA`, la cámara como no obligatoria (`camera.any` con `tools:replace`) y quita `RECORD_AUDIO` y `WRITE_EXTERNAL_STORAGE`, que agrega `camera_android_camerax`, y `READ_EXTERNAL_STORAGE`, que el combinador agrega como implícito. `android/app/proguard-rules.pro` tiene los `-dontwarn` de los reconocedores de ML Kit de otros alfabetos, sin los que R8 falla. iOS: `NSCameraUsageDescription` y `NSPhotoLibraryUsageDescription` en `Info.plist`; quedan para el Mac la macro `PERMISSION_CAMERA=1` en el Podfile y el mínimo de iOS 15.5 de ML Kit.
+- Android (6B):
+  - `build.gradle.kts` activa core library desugaring (`desugar_jdk_libs` 2.1.4), que exige flutter_local_notifications. El minSdk de Flutter ya es 24.
+  - El manifiesto `main` declara `INTERNET` (antes solo estaba en `debug/` y `profile/`), `ACCESS_NETWORK_STATE` y `POST_NOTIFICATIONS`.
+  - `res/drawable/ic_stat_alerta.xml` es el ícono de la notificación, y `res/raw/keep.xml` lo protege de la reducción de recursos.
+  - El manifiesto combinado de release no tiene `SCHEDULE_EXACT_ALARM`, `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, `USE_FULL_SCREEN_INTENT` ni `FOREGROUND_SERVICE`. Si un plugin los agregara, se quitan con `tools:node="remove"`.
+  - iOS: queda para el Mac la macro `PERMISSION_NOTIFICATIONS=1`.
+- Alertas de presupuesto (6B, RF-32, docs/07 §7.4):
+  - `NotifyBudgetAlerts` (`budgets/domain/usecases/`) evalúa el mes actual y usa `pendingBudgetAlerts` (`budget_alert_notice.dart`). Registra todos los umbrales cruzados que faltan (`BudgetAlertLog`, tabla `alertas_enviadas`) y notifica solo el más alto. Registra antes de notificar.
+  - Nada se quita del registro: si el gasto baja o el límite sube, el umbral no se repite en el mes.
+  - Línea base: la primera evaluación de una base (`alertas_linea_base` en `ajustes_locales`) registra lo ya cruzado sin notificar. `BudgetAlertNotificationController` no evalúa hasta la primera sincronización exitosa de la sesión (`SyncState.lastSyncedAt != null`), salvo que ya exista la línea base.
+  - El controlador, en `SyncTriggers`, se suscribe a `WatchBudgetAlerts` del mes: cubre registrar, editar o eliminar un gasto, crear, cambiar o quitar un presupuesto y el pull. También evalúa al terminar cada sincronización.
+    - Observa `clockProvider`, así que "Adelantar un mes" evalúa el mes nuevo. Si el mes cambia con la app abierta, se reinicia en la siguiente sincronización.
+    - Corre una evaluación a la vez y repite si llegó otro cambio. No usa temporizador: un `Timer` pendiente rompería las pruebas de widgets.
+  - Texto (`BudgetAlertNotice.body`), sin montos:
+    - "Llevas el 78% de tu presupuesto de Mercado."
+    - "Llegaste al 100% de tu presupuesto de Mercado de octubre." (exactamente 100)
+    - "Superaste tu presupuesto de Mercado de octubre." (más de 100)
+    - Título "Alerta de presupuesto".
+  - `LocalNotifications` (`core/notifications/`): se inicializa en `main()` y se pasa por override.
+    - Canal `alertas_presupuesto`, `NotificationVisibility.private`.
+    - Id estable FNV-1a de categoría y mes (`budgetAlertNotificationId`), así la del 100% reemplaza a la del 75%.
+    - Payload: solo `/profile/budgets`.
+    - No se programan notificaciones.
+  - `NotificationTapLauncher` (en el `builder`, junto a `WelcomeLauncher`) hace push a Presupuestos con la sesión `ready` y la app desbloqueada (6C). Solo acepta esa ruta.
+  - Permiso (`NotificationPermissionService`, `Permission.notification` de permission_handler 12.0.3):
+    - `maybeAskNotificationPermission` (`budgets/presentation/notification_permission_flow.dart`) se llama después de guardar un presupuesto (Presupuestos y paso 2 de la bienvenida).
+    - Explicación previa "Te avisamos de tus presupuestos" con "Permitir" / "Ahora no" (`showAppConfirmDialog` con `cancelLabel`).
+    - Solo si no se explicó antes (`permiso_notificaciones_explicado`), el interruptor está activo y el permiso está en `denied`. Se marca con cualquier respuesta: no se insiste.
+  - Interruptor propio en Perfil › Preferencias (`NotificationSettingsTile` con `AppSwitchTile`, `NotificationSettingsViewModel`), guardado en `notificaciones_presupuesto`.
+    - Apagado o sin permiso, se registra sin notificar: al activarlo no llegan avisos viejos.
+    - Activarlo pide el permiso. Con negado permanente o restringido ofrece "Abrir Ajustes", y al volver a primer plano se revisa.
+  - Al borrar los datos locales, `FileLocalDataWiper` llama a `cancelNotifications` (errores ignorados). El registro y los ajustes se van con la base.
+  - Limitaciones (docs/07 §7.4):
+    - Sin trabajo en segundo plano.
+    - Otro celular puede repetir una alerta una vez.
+    - Sin notificaciones antes de la primera sincronización.
+    - Solo el mes actual.
+- Señal de conexión (6B, docs/07 §7.8):
+  - `NetworkMonitor` (`core/sync/network_monitor.dart`, connectivity_plus).
+  - `SyncState` tiene `hasNetwork` y `lastAttemptOffline`; `isOffline` es `!hasNetwork || lastAttemptOffline`, así que `MainShell` y el Perfil no cambiaron.
+  - Sin red: aviso inmediato y sin backoff (queda el intervalo de 5 min).
+  - Al volver la red: `reconnectDebounce` de 2 s (cada cambio reinicia la espera), se reinicia el backoff y, si hay una sincronización en curso, se repite al terminar.
+  - El aviso solo se quita con una sincronización `ok`.
+  - Sin sesión lista (cierre de sesión, otro usuario, borrado) o con una base nueva, `SyncController` vuelve al estado inicial y olvida `lastSyncedAt`: la siguiente cuenta no ve en el Perfil la hora de sincronización de la anterior.
+  - Solo se escucha con `syncAutoTriggersProvider`. `TestSession` trae `FakeNetworkMonitor`, `FakeBudgetAlertNotifier` y `FakeNotificationPermission` (concedido por defecto).
+- Ingresar con huella, rostro o PIN (6C, docs/07 §7.7, docs/08 §8.8.2). Un solo ajuste controla el bloqueo al reabrir y el botón del login (cambio de diseño tras las pruebas con usuarios):
+  - **Sin PIN propio** (cambia los docs anteriores): `local_auth` con `biometricOnly: false`; el sistema decide entre huella, rostro o el PIN, patrón o contraseña del celular y controla los intentos. No se guarda ningún PIN ni hash, no hay "Olvidé mi PIN" y se quitó el borrado tras 5 intentos. Motivos: menos fricción, nada que olvidar ni guardar, intentos del sistema operativo.
+  - `core/security/`: `DeviceAuthenticator` (`LocalAuthDeviceAuthenticator`, resultados `DeviceAuthResult`: success, canceled, interrupted, lockedOut, noDeviceLock, failed), `AppLockStore` (`mislukas.app_lock_enabled`, leído en `main()` → `initialAppLockEnabledProvider`), `AppLockClock` (monotónico con `Stopwatch` + hora del sistema; no es `clockProvider`) y `ExternalActivityTracker`.
+  - `hasDeviceLock` usa `isDeviceSupported()`: en Android es `isDeviceSecure` o biometría registrada (no existe sin bloqueo seguro), así que sin bloqueo de pantalla da false. `noCredentialsSet` al autenticar también cuenta como "sin bloqueo".
+  - `AppLockController` (`auth/presentation/app_lock/`): arranque en frío con sesión (`ready` o `foreignData`) y bloqueo activo → bloqueado. Al volver, bloquea si el monotónico **o** la hora del sistema llegan a 5 min, o si la hora retrocedió. Con una acción propia de la app el límite es 30 min. Iniciar sesión con contraseña o con el botón del login (paso de `signedOut` a sesión) deja la app desbloqueada; la preferencia se vuelve a leer al iniciar sesión y al quedar `ready` (después de un borrado). La oferta (`_offerEligible`) se decide en cada recarga: después de un borrado por otra cuenta, la preferencia queda en false y se ofrece.
+  - Acciones propias: `ExternalActivityTracker.run` (permiso de cámara y de notificaciones, galería y el propio diálogo del sistema) y `markLeavingForSettings` (Ajustes; vale para la siguiente salida si ocurre en 10 s). Se pasa a `PermissionHandlerCameraPermission`, `ImagePickerReceiptPicker` y `PermissionHandlerNotificationPermission`.
+  - El diálogo del sistema se abre solo una vez por bloqueo; cancelar espera a "Ingresar con huella, rostro o PIN". Si el sistema lo cierra (`interrupted`) se repite al volver.
+  - Sin bloqueo de pantalla, la protección se pausa: la app queda desbloqueada, la preferencia se conserva y se revisa en el siguiente bloqueo. La fila del Perfil queda desactivada con "Configura un bloqueo de pantalla en tu celular para proteger MisLukas".
+  - `AppLockGate` es lo más externo del `builder`: `Offstage` + `ExcludeFocus` + `TickerMode` (el contenido conserva su estado), `UnlockScreen` con su propio `Navigator` y `PrivacyCover` (logo, sin datos) mientras la app no está `resumed`. `ForeignDataPrompt`, `WelcomeLauncher` y `NotificationTapLauncher` esperan a `contentVisible`.
+  - `UnlockScreen`: "Hola, \<nombre\>", "Ingresar con huella, rostro o PIN" y "¿No eres tú? Cerrar sesión" (todos los textos del bloqueo usan "huella, rostro o PIN"; el mismo `showSignOutDialog` del Perfil, que solo ofrece conservar la sesión con la base `ready`; textos en `auth/presentation/sign_out_messages.dart`).
+  - `AppLockOfferLauncher` ("Ingresa con tu huella, rostro o PIN"): después de iniciar sesión, con la primera sincronización exitosa, bienvenida `done` y cerrada (`welcomeOpenProvider`, que `WelcomeLauncher` mantiene con el Future del push: el `pop` de la bienvenida cerraba el diálogo) y con bloqueo de pantalla. "Activar" solo guarda la preferencia (`enableAfterSignIn`), **sin** el diálogo del sistema (se sentía como doble factor), y muestra "Listo. La próxima vez entrarás con tu huella, rostro o el PIN de tu celular."; aplica desde la siguiente apertura o regreso. Una vez por inicio de sesión; no se ofrece si ya está activo.
+  - Perfil › Preferencias: `AppLockSettingsTile` ("Ingresar con huella, rostro o PIN"; reemplaza a "Bloqueo con tu celular"). Activar → `/profile/app-lock` (`EnableAppLockScreen` + `EnableAppLockViewModel`): contraseña con `reauthenticate` y luego el diálogo del sistema; si se cancela, se reintenta sin la contraseña. Desactivar: solo el diálogo del sistema.
+  - Recientes: capa propia y `setRecentsScreenshotEnabled(false)` en Android 13+ (`MainActivity`). Sin FLAG_SECURE: las capturas siguen permitidas.
+  - **La preferencia acompaña a los datos** (cambia la 6C anterior, que la conservaba como del dispositivo): sobrevive a "Cerrar sesión" que conserva la sesión, y el wiper la borra (`AppLockStore.clear`) en el borrado total, al eliminar la cuenta y en el borrado por otra cuenta. Si la heredara otra cuenta, su "Cerrar sesión" no borraría sus datos.
+  - **Sesión en espera** (`parkedSessionProvider`, `auth/presentation/parked_session.dart`): id del usuario en `mislukas.parked_session_user` (`DeviceSessionStore.readParkedUser`/`writeParkedUser`/`clearParkedUser`), leído en `main()` → `initialParkedUserProvider`; si la lectura falla, se toma el id de `currentUser` (falla cerrada). `AccountSessionController` da `signedOut` si `currentUser.id` es el de la marca (no hay estado nuevo: router, sincronización y launchers ya lo tratan como sin sesión). La marca se borra sola si entra otra cuenta (se compara por id), con la contraseña del mismo usuario (`LoginViewModel`), con el botón y en el wiper. No se borra cuando la sesión desaparece: sin sesión no aplica (`savedSessionProvider` = `currentUser != null && id == marca`).
+  - `AccountActions.park()`: guarda la marca (si falla, no cierra nada), luego `shutdown` de la sincronización e invalida `syncServiceProvider`. No hace push, no llama a `signOut` ni al wiper; la sesión de Supabase sigue guardada y gotrue la sigue renovando.
+  - `showSignOutDialog` (`auth/presentation/widgets/sign_out_dialog.dart`) → `SignOutChoice` keep / wipe / cancel. Con `AppLockState.canKeepSession` (ajuste activo y `deviceLockAvailable == true`): "Cerrar sesión" (park) y "Cerrar sesión y borrar los datos de este celular" (borrado total, en rojo). Sin él, una sola acción: el borrado total de siempre. `ProfileViewModel.park()` y `signOut()`.
+  - Login: `QuickSignInSection` (`auth/presentation/widgets/`) debajo de `LoginForm`, solo en "Iniciar sesión": separador "o" y una lista de opciones (hoy solo "Ingresar con huella, rostro o PIN"; ahí irán "Continuar con Google" y "Continuar con Apple"). Sin opciones ni aviso no ocupa espacio. El diálogo no se abre solo.
+  - `QuickSignInViewModel`: `available` = `savedSessionProvider` && ajuste activo && `deviceLockAvailable == true` (se revisa al abrir y al volver a primer plano). `signIn`: diálogo del sistema ("Confirma que eres tú para ingresar", con `ExternalActivityTracker.run`) y `AuthRepository.resumeSession()` (`refreshSession`, siempre al servidor). Con `AuthFailure.sessionExpired` (nuevo: cualquier `AuthException` no reintentable; gotrue ya borró la sesión) muestra "Tu sesión expiró. Ingresa con tu correo y contraseña.", borra la marca y conserva los datos y el dueño (regla 5C). Sin red u otro error, entra igual (offline-first). Cancelado, pausado y fallo usan los textos de `UnlockScreen`.
+  - Otra cuenta con la sesión en espera: su sesión reemplaza la guardada (sin revocarla en el servidor) y sigue `ForeignDataPrompt`. Registro y recuperación no cambian; si la app se cierra mientras se verifica un código de recuperación, `clearInterruptedRecovery` cierra la sesión guardada.
+  - **Limitación documentada:** es una puerta de la app; el refresh token no está atado a una clave del Keystore con autenticación obligatoria. Trabajo futuro con `biometric_storage` (docs/08 §8.8.2).
+  - Sin atajos para saltar el bloqueo, ni en desarrollo.
+  - `TestSession` trae `MemoryAppLockStore` (apagado), `FakeDeviceAuthenticator(hasLock: false)` (sin oferta en las pruebas que no son del bloqueo) y `FakeAppLockClock`. `MemoryDeviceSessionStore` tiene `parkedUser` y `failNextParkedWrite`; `FakeAuthRepository.resumeSession` responde con `failNext` (con `sessionExpired` borra la sesión).
+- Android (6C): `MainActivity` extiende `FlutterFragmentActivity`; el manifiesto declara `USE_BIOMETRIC`; `LaunchTheme` y `NormalTheme` (claro y oscuro) heredan de AppCompat, que pide local_auth para no fallar en Android 8. iOS: `NSFaceIDUsageDescription` en `Info.plist`.
 - Fecha simulada solo en desarrollo: `clockProvider` usa `MonthShiftedClock` si `debugMonthOffsetProvider` es distinto de 0 y `kDebugMode`. Lo controlan "Adelantar un mes" y "Volver a la fecha real" en `DemoDataActions`; el desfase vive en memoria. Mientras está adelantada, todo lo que se guarda lleva fechas y `actualizado_en` futuros (que ganarían conflictos reales): solo se usa con una cuenta de prueba que se elimina al final.
 
 ## Stack
@@ -134,7 +223,7 @@ Decisiones tomadas durante el desarrollo que ajustan o precisan la documentació
 - **uuid**, **path_provider** y **flutter_secure_storage**: ya incorporadas en la Fase 4 (identificadores, ubicación de la base y clave de cifrado).
 - **Supabase** (`supabase_flutter`, incorporado en la Fase 5A): Auth, PostgreSQL con Row Level Security y Storage (Fase 5).
 - **flutter_localizations** (del SDK, incorporado en la Fase 5D): textos del sistema en español (calendario).
-- **Paquetes del dispositivo** (Fase 6): `camera`, `image_picker`, `google_mlkit_text_recognition`, `flutter_local_notifications`, `local_auth`, `connectivity_plus`.
+- **Paquetes del dispositivo** (Fase 6): `camera`, `image_picker`, `google_mlkit_text_recognition`, `flutter_local_notifications`, `local_auth`, `connectivity_plus`. En la 6A se incorporaron `camera`, `image_picker` y `google_mlkit_text_recognition`, más `permission_handler` (permiso de cámara) y `cryptography` + `cryptography_flutter` (cifrado de las imágenes), aprobados aparte. En la 6B, `flutter_local_notifications` 22.3.2 (la 23 exige compileSdk 37) y `connectivity_plus` 7.3.2. En la 6C, `local_auth` 3.0.2, con `local_auth_android` 2.3.0 y `local_auth_darwin` 2.0.5 como dependencias directas solo para los textos en español del diálogo (`AndroidAuthMessages`, `IOSAuthMessages`). Las versiones de la Fase 6 van fijas en pubspec.yaml (sin `^`). `permission_handler` va en 12.0.3: las 13.x traen `permission_handler_android` 14.x, que exige compileSdk 37, y el AGP 9.1 del proyecto recomienda como máximo 36.
 
 No agregues dependencias de una fase futura ni paquetes fuera de esta lista sin consultarme.
 
@@ -164,7 +253,8 @@ lib/
 │   ├── utils/       # CurrencyFormatter, validaciones, fechas
 │   ├── security/    # (Fase 5-6) almacenamiento seguro, biometría
 │   ├── database/    # (Fase 4) Drift, tablas, migraciones
-│   ├── sync/        # (Fase 5) sincronización
+│   ├── sync/        # (Fase 5) sincronización y señal de red
+│   ├── notifications/ # (Fase 6B) notificaciones locales
 │   └── errors/      # Errores y mensajes para el usuario
 └── features/
     ├── auth/        # Login, registro, recuperación, desbloqueo
@@ -204,7 +294,7 @@ En `lib/core/widgets/`. Importar siempre desde `package:mislukas/core/widgets/wi
 - `AppCheckboxTile`: casilla con texto que puede incluir enlaces (`AppTextSegment`).
 - `AppPasswordStrength`: barra de fortaleza (Débil/Media/Fuerte) y lista de requisitos de contraseña.
 - `AppCodeField`: código de verificación de 6 dígitos en casillas, solo números, con autocompletado del código y error.
-- `ReceiptPreview`: vista previa de un recibo con el total resaltado como "Área detectada".
+- `ReceiptPreview`: foto del recibo sobre fondo oscuro con el total resaltado como "Área detectada" (`ReceiptPreview.image(bytes, detectedArea:)`), mientras carga (`.loading()`) o sin foto (`.unavailable(notOnDevice | unreadable)`). La imagen llega en memoria; en la galería se dibuja una de muestra.
 - `AppCard`: tarjeta blanca con borde sutil y `onTap` opcional.
 - `AppSectionHeader`: título de sección con acción opcional a la derecha ("Ver todos").
 - `CategoryIcon`: ícono de categoría (`CategoryKind`) en un cuadrado con fondo pastel.
@@ -216,7 +306,8 @@ En `lib/core/widgets/`. Importar siempre desde `package:mislukas/core/widgets/wi
 - `AppEmptyState`: estado vacío con ícono, título, descripción y acción opcional.
 - `AppOfflineIndicator`: aviso discreto de "Sin conexión".
 - `AppSnackbar`: `AppSnackbar.success` / `AppSnackbar.error` / `AppSnackbar.info` para mensajes breves.
-- `showAppConfirmDialog`: diálogo de confirmación con "Cancelar" y una acción (en rojo con `destructive`); devuelve true si el usuario confirma.
+- `showAppConfirmDialog`: diálogo de confirmación con "Cancelar" (o `cancelLabel`, como "Ahora no") y una acción (en rojo con `destructive`); devuelve true si el usuario confirma.
+- `AppSwitchTile`: ajuste con ícono, título, descripción e interruptor; toda la tarjeta lo cambia ("Notificaciones de presupuesto").
 - `DemoDataActions` (`core/widgets/dev/`): "Cargar datos de demostración", "Borrar todos los datos" y la fecha simulada ("Adelantar un mes"); solo se muestra en modo desarrollo.
 - `AppBottomNav`: barra inferior con Inicio, Reportes, Simular y Perfil.
 - `AppDonutChart` / `AppChartSegment`: gráfico de dona (CustomPainter) con contenido central y descripción para lectores de pantalla.
@@ -268,7 +359,7 @@ Detalle completo en `docs/08-seguridad.md`.
 
 - **Nunca** incluir la clave `service_role` de Supabase en la app ni en el repositorio.
 - **Nunca** escribir claves, URLs privadas ni secretos en el código; usar variables de entorno (`--dart-define`).
-- Tokens de sesión, clave de cifrado y hash del PIN: **solo** en `flutter_secure_storage`.
+- Tokens de sesión, claves de cifrado, la marca de sesión en espera y la preferencia de bloqueo: **solo** en `flutter_secure_storage`. No hay PIN propio de la app (6C).
 - **Nunca** guardar datos financieros en SharedPreferences ni en almacenamiento sin cifrar.
 - **Nunca** escribir en logs tokens, montos, correos ni contenido de recibos.
 - Consultas siempre parametrizadas. No construir SQL con interpolación de texto.

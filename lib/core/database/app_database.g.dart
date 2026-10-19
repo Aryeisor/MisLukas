@@ -3403,6 +3403,332 @@ class LocalSettingsCompanion extends UpdateCompanion<LocalSettingRow> {
   }
 }
 
+class $SentBudgetAlertsTable extends SentBudgetAlerts
+    with TableInfo<$SentBudgetAlertsTable, SentBudgetAlertRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SentBudgetAlertsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _categoryIdMeta = const VerificationMeta(
+    'categoryId',
+  );
+  @override
+  late final GeneratedColumn<String> categoryId = GeneratedColumn<String>(
+    'categoria_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES categorias (id)',
+    ),
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime, String> month =
+      GeneratedColumn<String>(
+        'mes',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<DateTime>($SentBudgetAlertsTable.$convertermonth);
+  static const VerificationMeta _thresholdMeta = const VerificationMeta(
+    'threshold',
+  );
+  @override
+  late final GeneratedColumn<int> threshold = GeneratedColumn<int>(
+    'umbral',
+    aliasedName,
+    false,
+    check: () => threshold.isIn(const [75, 100]),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sentAtMeta = const VerificationMeta('sentAt');
+  @override
+  late final GeneratedColumn<DateTime> sentAt = GeneratedColumn<DateTime>(
+    'enviada_en',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [categoryId, month, threshold, sentAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'alertas_enviadas';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SentBudgetAlertRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('categoria_id')) {
+      context.handle(
+        _categoryIdMeta,
+        categoryId.isAcceptableOrUnknown(
+          data['categoria_id']!,
+          _categoryIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_categoryIdMeta);
+    }
+    if (data.containsKey('umbral')) {
+      context.handle(
+        _thresholdMeta,
+        threshold.isAcceptableOrUnknown(data['umbral']!, _thresholdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_thresholdMeta);
+    }
+    if (data.containsKey('enviada_en')) {
+      context.handle(
+        _sentAtMeta,
+        sentAt.isAcceptableOrUnknown(data['enviada_en']!, _sentAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sentAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {categoryId, month, threshold};
+  @override
+  SentBudgetAlertRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SentBudgetAlertRow(
+      categoryId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}categoria_id'],
+      )!,
+      month: $SentBudgetAlertsTable.$convertermonth.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}mes'],
+        )!,
+      ),
+      threshold: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}umbral'],
+      )!,
+      sentAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}enviada_en'],
+      )!,
+    );
+  }
+
+  @override
+  $SentBudgetAlertsTable createAlias(String alias) {
+    return $SentBudgetAlertsTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<DateTime, String> $convertermonth =
+      const SqlDateConverter();
+}
+
+class SentBudgetAlertRow extends DataClass
+    implements Insertable<SentBudgetAlertRow> {
+  final String categoryId;
+
+  /// Primer día del mes.
+  final DateTime month;
+  final int threshold;
+  final DateTime sentAt;
+  const SentBudgetAlertRow({
+    required this.categoryId,
+    required this.month,
+    required this.threshold,
+    required this.sentAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['categoria_id'] = Variable<String>(categoryId);
+    {
+      map['mes'] = Variable<String>(
+        $SentBudgetAlertsTable.$convertermonth.toSql(month),
+      );
+    }
+    map['umbral'] = Variable<int>(threshold);
+    map['enviada_en'] = Variable<DateTime>(sentAt);
+    return map;
+  }
+
+  SentBudgetAlertsCompanion toCompanion(bool nullToAbsent) {
+    return SentBudgetAlertsCompanion(
+      categoryId: Value(categoryId),
+      month: Value(month),
+      threshold: Value(threshold),
+      sentAt: Value(sentAt),
+    );
+  }
+
+  factory SentBudgetAlertRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SentBudgetAlertRow(
+      categoryId: serializer.fromJson<String>(json['categoryId']),
+      month: serializer.fromJson<DateTime>(json['month']),
+      threshold: serializer.fromJson<int>(json['threshold']),
+      sentAt: serializer.fromJson<DateTime>(json['sentAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'categoryId': serializer.toJson<String>(categoryId),
+      'month': serializer.toJson<DateTime>(month),
+      'threshold': serializer.toJson<int>(threshold),
+      'sentAt': serializer.toJson<DateTime>(sentAt),
+    };
+  }
+
+  SentBudgetAlertRow copyWith({
+    String? categoryId,
+    DateTime? month,
+    int? threshold,
+    DateTime? sentAt,
+  }) => SentBudgetAlertRow(
+    categoryId: categoryId ?? this.categoryId,
+    month: month ?? this.month,
+    threshold: threshold ?? this.threshold,
+    sentAt: sentAt ?? this.sentAt,
+  );
+  SentBudgetAlertRow copyWithCompanion(SentBudgetAlertsCompanion data) {
+    return SentBudgetAlertRow(
+      categoryId: data.categoryId.present
+          ? data.categoryId.value
+          : this.categoryId,
+      month: data.month.present ? data.month.value : this.month,
+      threshold: data.threshold.present ? data.threshold.value : this.threshold,
+      sentAt: data.sentAt.present ? data.sentAt.value : this.sentAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SentBudgetAlertRow(')
+          ..write('categoryId: $categoryId, ')
+          ..write('month: $month, ')
+          ..write('threshold: $threshold, ')
+          ..write('sentAt: $sentAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(categoryId, month, threshold, sentAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SentBudgetAlertRow &&
+          other.categoryId == this.categoryId &&
+          other.month == this.month &&
+          other.threshold == this.threshold &&
+          other.sentAt == this.sentAt);
+}
+
+class SentBudgetAlertsCompanion extends UpdateCompanion<SentBudgetAlertRow> {
+  final Value<String> categoryId;
+  final Value<DateTime> month;
+  final Value<int> threshold;
+  final Value<DateTime> sentAt;
+  final Value<int> rowid;
+  const SentBudgetAlertsCompanion({
+    this.categoryId = const Value.absent(),
+    this.month = const Value.absent(),
+    this.threshold = const Value.absent(),
+    this.sentAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SentBudgetAlertsCompanion.insert({
+    required String categoryId,
+    required DateTime month,
+    required int threshold,
+    required DateTime sentAt,
+    this.rowid = const Value.absent(),
+  }) : categoryId = Value(categoryId),
+       month = Value(month),
+       threshold = Value(threshold),
+       sentAt = Value(sentAt);
+  static Insertable<SentBudgetAlertRow> custom({
+    Expression<String>? categoryId,
+    Expression<String>? month,
+    Expression<int>? threshold,
+    Expression<DateTime>? sentAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (categoryId != null) 'categoria_id': categoryId,
+      if (month != null) 'mes': month,
+      if (threshold != null) 'umbral': threshold,
+      if (sentAt != null) 'enviada_en': sentAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SentBudgetAlertsCompanion copyWith({
+    Value<String>? categoryId,
+    Value<DateTime>? month,
+    Value<int>? threshold,
+    Value<DateTime>? sentAt,
+    Value<int>? rowid,
+  }) {
+    return SentBudgetAlertsCompanion(
+      categoryId: categoryId ?? this.categoryId,
+      month: month ?? this.month,
+      threshold: threshold ?? this.threshold,
+      sentAt: sentAt ?? this.sentAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (categoryId.present) {
+      map['categoria_id'] = Variable<String>(categoryId.value);
+    }
+    if (month.present) {
+      map['mes'] = Variable<String>(
+        $SentBudgetAlertsTable.$convertermonth.toSql(month.value),
+      );
+    }
+    if (threshold.present) {
+      map['umbral'] = Variable<int>(threshold.value);
+    }
+    if (sentAt.present) {
+      map['enviada_en'] = Variable<DateTime>(sentAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SentBudgetAlertsCompanion(')
+          ..write('categoryId: $categoryId, ')
+          ..write('month: $month, ')
+          ..write('threshold: $threshold, ')
+          ..write('sentAt: $sentAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3413,6 +3739,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SyncQueueTable syncQueue = $SyncQueueTable(this);
   late final $SyncMetadataTable syncMetadata = $SyncMetadataTable(this);
   late final $LocalSettingsTable localSettings = $LocalSettingsTable(this);
+  late final $SentBudgetAlertsTable sentBudgetAlerts = $SentBudgetAlertsTable(
+    this,
+  );
   late final Index idxMovimientosFecha = Index(
     'idx_movimientos_fecha',
     'CREATE INDEX idx_movimientos_fecha ON movimientos (fecha)',
@@ -3437,6 +3766,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     syncQueue,
     syncMetadata,
     localSettings,
+    sentBudgetAlerts,
     idxMovimientosFecha,
     idxPresupuestosCategoriaMesActivo,
     idxRecibosMovimientoActivo,
@@ -3507,6 +3837,26 @@ final class $$CategoriesTableReferences
     ).filter((f) => f.categoryId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_budgetsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$SentBudgetAlertsTable, List<SentBudgetAlertRow>>
+  _sentBudgetAlertsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.sentBudgetAlerts,
+    aliasName: 'categorias__id__alertas_enviadas__categoria_id',
+  );
+
+  $$SentBudgetAlertsTableProcessedTableManager get sentBudgetAlertsRefs {
+    final manager = $$SentBudgetAlertsTableTableManager(
+      $_db,
+      $_db.sentBudgetAlerts,
+    ).filter((f) => f.categoryId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _sentBudgetAlertsRefsTable($_db),
+    );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -3608,6 +3958,31 @@ class $$CategoriesTableFilterComposer
           }) => $$BudgetsTableFilterComposer(
             $db: $db,
             $table: $db.budgets,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> sentBudgetAlertsRefs(
+    Expression<bool> Function($$SentBudgetAlertsTableFilterComposer f) f,
+  ) {
+    final $$SentBudgetAlertsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.sentBudgetAlerts,
+      getReferencedColumn: (t) => t.categoryId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SentBudgetAlertsTableFilterComposer(
+            $db: $db,
+            $table: $db.sentBudgetAlerts,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -3760,6 +4135,31 @@ class $$CategoriesTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> sentBudgetAlertsRefs<T extends Object>(
+    Expression<T> Function($$SentBudgetAlertsTableAnnotationComposer a) f,
+  ) {
+    final $$SentBudgetAlertsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.sentBudgetAlerts,
+      getReferencedColumn: (t) => t.categoryId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SentBudgetAlertsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.sentBudgetAlerts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$CategoriesTableTableManager
@@ -3775,7 +4175,11 @@ class $$CategoriesTableTableManager
           $$CategoriesTableUpdateCompanionBuilder,
           (CategoryRow, $$CategoriesTableReferences),
           CategoryRow,
-          PrefetchHooks Function({bool movementsRefs, bool budgetsRefs})
+          PrefetchHooks Function({
+            bool movementsRefs,
+            bool budgetsRefs,
+            bool sentBudgetAlertsRefs,
+          })
         > {
   $$CategoriesTableTableManager(_$AppDatabase db, $CategoriesTable table)
     : super(
@@ -3845,12 +4249,17 @@ class $$CategoriesTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({movementsRefs = false, budgetsRefs = false}) {
+              ({
+                movementsRefs = false,
+                budgetsRefs = false,
+                sentBudgetAlertsRefs = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (movementsRefs) db.movements,
                     if (budgetsRefs) db.budgets,
+                    if (sentBudgetAlertsRefs) db.sentBudgetAlerts,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -3897,6 +4306,27 @@ class $$CategoriesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (sentBudgetAlertsRefs)
+                        await $_getPrefetchedData<
+                          CategoryRow,
+                          $CategoriesTable,
+                          SentBudgetAlertRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$CategoriesTableReferences
+                              ._sentBudgetAlertsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$CategoriesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).sentBudgetAlertsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.categoryId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -3917,7 +4347,11 @@ typedef $$CategoriesTableProcessedTableManager =
       $$CategoriesTableUpdateCompanionBuilder,
       (CategoryRow, $$CategoriesTableReferences),
       CategoryRow,
-      PrefetchHooks Function({bool movementsRefs, bool budgetsRefs})
+      PrefetchHooks Function({
+        bool movementsRefs,
+        bool budgetsRefs,
+        bool sentBudgetAlertsRefs,
+      })
     >;
 typedef $$MovementsTableCreateCompanionBuilder = MovementsCompanion Function({
   required DateTime createdAt,
@@ -5812,6 +6246,316 @@ typedef $$LocalSettingsTableProcessedTableManager =
       LocalSettingRow,
       PrefetchHooks Function()
     >;
+typedef $$SentBudgetAlertsTableCreateCompanionBuilder =
+    SentBudgetAlertsCompanion Function({
+      required String categoryId,
+      required DateTime month,
+      required int threshold,
+      required DateTime sentAt,
+      Value<int> rowid,
+    });
+typedef $$SentBudgetAlertsTableUpdateCompanionBuilder =
+    SentBudgetAlertsCompanion Function({
+      Value<String> categoryId,
+      Value<DateTime> month,
+      Value<int> threshold,
+      Value<DateTime> sentAt,
+      Value<int> rowid,
+    });
+
+final class $$SentBudgetAlertsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $SentBudgetAlertsTable,
+          SentBudgetAlertRow
+        > {
+  $$SentBudgetAlertsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $CategoriesTable _categoryIdTable(_$AppDatabase db) => db.categories
+      .createAlias('alertas_enviadas__categoria_id__categorias__id');
+
+  $$CategoriesTableProcessedTableManager get categoryId {
+    final $_column = $_itemColumn<String>('categoria_id')!;
+
+    final manager = $$CategoriesTableTableManager(
+      $_db,
+      $_db.categories,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_categoryIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$SentBudgetAlertsTableFilterComposer
+    extends Composer<_$AppDatabase, $SentBudgetAlertsTable> {
+  $$SentBudgetAlertsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnWithTypeConverterFilters<DateTime, DateTime, String> get month =>
+      $composableBuilder(
+        column: $table.month,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnFilters<int> get threshold => $composableBuilder(
+    column: $table.threshold,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get sentAt => $composableBuilder(
+    column: $table.sentAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$CategoriesTableFilterComposer get categoryId {
+    final $$CategoriesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.categoryId,
+      referencedTable: $db.categories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CategoriesTableFilterComposer(
+            $db: $db,
+            $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SentBudgetAlertsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SentBudgetAlertsTable> {
+  $$SentBudgetAlertsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get month => $composableBuilder(
+    column: $table.month,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get threshold => $composableBuilder(
+    column: $table.threshold,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get sentAt => $composableBuilder(
+    column: $table.sentAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$CategoriesTableOrderingComposer get categoryId {
+    final $$CategoriesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.categoryId,
+      referencedTable: $db.categories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CategoriesTableOrderingComposer(
+            $db: $db,
+            $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SentBudgetAlertsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SentBudgetAlertsTable> {
+  $$SentBudgetAlertsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumnWithTypeConverter<DateTime, String> get month =>
+      $composableBuilder(column: $table.month, builder: (column) => column);
+
+  GeneratedColumn<int> get threshold =>
+      $composableBuilder(column: $table.threshold, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get sentAt =>
+      $composableBuilder(column: $table.sentAt, builder: (column) => column);
+
+  $$CategoriesTableAnnotationComposer get categoryId {
+    final $$CategoriesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.categoryId,
+      referencedTable: $db.categories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CategoriesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SentBudgetAlertsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SentBudgetAlertsTable,
+          SentBudgetAlertRow,
+          $$SentBudgetAlertsTableFilterComposer,
+          $$SentBudgetAlertsTableOrderingComposer,
+          $$SentBudgetAlertsTableAnnotationComposer,
+          $$SentBudgetAlertsTableCreateCompanionBuilder,
+          $$SentBudgetAlertsTableUpdateCompanionBuilder,
+          (SentBudgetAlertRow, $$SentBudgetAlertsTableReferences),
+          SentBudgetAlertRow,
+          PrefetchHooks Function({bool categoryId})
+        > {
+  $$SentBudgetAlertsTableTableManager(
+    _$AppDatabase db,
+    $SentBudgetAlertsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SentBudgetAlertsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SentBudgetAlertsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SentBudgetAlertsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> categoryId = const Value.absent(),
+                Value<DateTime> month = const Value.absent(),
+                Value<int> threshold = const Value.absent(),
+                Value<DateTime> sentAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SentBudgetAlertsCompanion(
+                categoryId: categoryId,
+                month: month,
+                threshold: threshold,
+                sentAt: sentAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String categoryId,
+                required DateTime month,
+                required int threshold,
+                required DateTime sentAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SentBudgetAlertsCompanion.insert(
+                categoryId: categoryId,
+                month: month,
+                threshold: threshold,
+                sentAt: sentAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SentBudgetAlertsTable, SentBudgetAlertRow>(
+                    table,
+                  ),
+                  $$SentBudgetAlertsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({categoryId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (categoryId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.categoryId,
+                        referencedTable: $$SentBudgetAlertsTableReferences
+                            ._categoryIdTable(db),
+                        referencedColumn: $$SentBudgetAlertsTableReferences
+                            ._categoryIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$SentBudgetAlertsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SentBudgetAlertsTable,
+      SentBudgetAlertRow,
+      $$SentBudgetAlertsTableFilterComposer,
+      $$SentBudgetAlertsTableOrderingComposer,
+      $$SentBudgetAlertsTableAnnotationComposer,
+      $$SentBudgetAlertsTableCreateCompanionBuilder,
+      $$SentBudgetAlertsTableUpdateCompanionBuilder,
+      (SentBudgetAlertRow, $$SentBudgetAlertsTableReferences),
+      SentBudgetAlertRow,
+      PrefetchHooks Function({bool categoryId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -5830,4 +6574,6 @@ class $AppDatabaseManager {
       $$SyncMetadataTableTableManager(_db, _db.syncMetadata);
   $$LocalSettingsTableTableManager get localSettings =>
       $$LocalSettingsTableTableManager(_db, _db.localSettings);
+  $$SentBudgetAlertsTableTableManager get sentBudgetAlerts =>
+      $$SentBudgetAlertsTableTableManager(_db, _db.sentBudgetAlerts);
 }

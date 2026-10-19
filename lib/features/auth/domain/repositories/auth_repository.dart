@@ -46,6 +46,12 @@ abstract interface class AuthRepository {
   /// sesión: el servidor sabe que la contraseña se verificó hace poco.
   Future<void> reauthenticate({required String password});
 
+  /// Renueva la sesión guardada con el servidor, antes de volver a usarla
+  /// desde el login (docs/07 §7.7). Si el servidor la rechaza, la sesión se
+  /// borra de este dispositivo y lanza [AuthFailure.sessionExpired]; sin
+  /// conexión lanza [AuthFailure.network] y la sesión sigue guardada.
+  Future<void> resumeSession();
+
   /// Cierra la sesión en este dispositivo.
   Future<void> signOut();
 }

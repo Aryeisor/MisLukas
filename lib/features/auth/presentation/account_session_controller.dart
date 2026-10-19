@@ -10,11 +10,14 @@ import '../data/auth_providers.dart';
 import '../domain/auth_failure.dart';
 import '../domain/entities/auth_user.dart';
 import '../domain/repositories/auth_repository.dart';
+import 'parked_session.dart';
 import 'password_recovery_flow.dart';
 
 /// Estado de la sesión con respecto a los datos de este dispositivo.
 enum AccountSessionStatus {
-  /// Sin sesión (o con la sesión temporal de una recuperación de contraseña).
+  /// Sin sesión, con la sesión temporal de una recuperación de contraseña o
+  /// con la sesión guardada en espera del bloqueo del celular
+  /// ([parkedSessionProvider]).
   signedOut,
 
   /// Entró un usuario distinto del dueño de la base local: hay que confirmar
@@ -61,7 +64,9 @@ final accountSessionProvider =
 /// - Si la sesión se cierra sin que el usuario lo pida (revocada en el
 ///   servidor), los datos se conservan cifrados para enviarlos cuando vuelva
 ///   a entrar (docs/06 §6.6.4).
-/// - Cerrar sesión o eliminar la cuenta borra todo lo local (docs/08 §8.8.4).
+/// - Cerrar sesión con "Ingresar con huella, rostro o PIN" activo deja la
+///   sesión en espera ([parkedSessionProvider]) y conserva todo; el borrado
+///   total y eliminar la cuenta borran todo lo local (docs/08 §8.8.4).
 class AccountSessionController extends Notifier<AccountSessionStatus> {
   /// Tiempo máximo de un borrado de datos locales. Pase lo que pase, al
   /// terminar el estado se vuelve a calcular con la sesión actual: la app
@@ -90,6 +95,7 @@ class AccountSessionController extends Notifier<AccountSessionStatus> {
       passwordRecoveryInProgressProvider,
       (_, _) => _evaluate(_auth.currentUser),
     );
+    ref.listen(parkedSessionProvider, (_, _) => _evaluate(_auth.currentUser));
     return _statusFor(_auth.currentUser);
   }
 
@@ -108,6 +114,10 @@ class AccountSessionController extends Notifier<AccountSessionStatus> {
   AccountSessionStatus _statusFor(AuthUser? user) {
     // La sesión temporal de la recuperación no abre los datos.
     if (user == null || ref.read(passwordRecoveryInProgressProvider)) {
+      return AccountSessionStatus.signedOut;
+    }
+    // La sesión guardada de este usuario espera el bloqueo del celular.
+    if (ref.read(parkedSessionProvider) == user.id) {
       return AccountSessionStatus.signedOut;
     }
     final owner = _owner;
@@ -220,8 +230,10 @@ class AccountNoticeController extends Notifier<AccountNotice?> {
 
 final accountActionsProvider = Provider<AccountActions>(AccountActions.new);
 
-/// Cierre de sesión y fin de la eliminación de la cuenta: detienen la
-/// sincronización, cierran la sesión y borran todo lo local (docs/08 §8.8.4).
+/// Cierre de sesión y fin de la eliminación de la cuenta (docs/08 §8.8.4):
+/// - [park]: con "Ingresar con huella, rostro o PIN" activo, vuelve al login
+///   sin revocar la sesión ni borrar nada.
+/// - [signOut]: borrado total; cierra la sesión y borra todo lo local.
 /// Separado de [AccountSessionController] porque la sincronización depende
 /// de ese estado.
 class AccountActions {
@@ -229,7 +241,29 @@ class AccountActions {
 
   final Ref _ref;
 
-  /// Cierra la sesión y borra todo lo local. Antes intenta enviar los
+  /// Vuelve al login dejando la sesión en espera: no la revoca en Supabase ni
+  /// borra la base, sus claves ni los recibos, así que los cambios sin
+  /// sincronizar se envían al volver a entrar. Solo se reutiliza después del
+  /// diálogo del sistema o de la contraseña.
+  Future<SignOutOutcome> park() async {
+    final user = _ref.read(authRepositoryProvider).currentUser;
+    if (user == null ||
+        _ref.read(accountSessionProvider) != AccountSessionStatus.ready) {
+      return const SignOutFailed(AuthFailure.unknown);
+    }
+    // Sin la marca guardada no se sigue: la sesión y la sincronización quedan
+    // como estaban.
+    if (!await _ref.read(parkedSessionProvider.notifier).park(user.id)) {
+      return const SignOutFailed(AuthFailure.unknown);
+    }
+    // Termina lo que estuviera en curso. El servicio detenido no se reutiliza:
+    // al volver a entrar, la sincronización empieza con uno nuevo.
+    await _ref.read(syncControllerProvider.notifier).shutdown();
+    _ref.invalidate(syncServiceProvider);
+    return const SignOutDone();
+  }
+
+  /// Borrado total: cierra la sesión y borra todo lo local. Antes intenta enviar los
   /// cambios pendientes; si quedan y no es [force], no cierra y devuelve
   /// [SignOutHasPending] para que el usuario confirme que se pierden.
   Future<SignOutOutcome> signOut({bool force = false}) async {

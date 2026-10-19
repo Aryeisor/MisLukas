@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mislukas/core/database/app_database.dart';
 import 'package:mislukas/core/sync/sync_controller.dart';
 import 'package:mislukas/core/widgets/widgets.dart';
 import 'package:mislukas/features/budgets/domain/entities/default_categories.dart';
@@ -133,6 +134,118 @@ void main() {
       expect(containerOf(tester).read(syncControllerProvider).pendingCount, 0);
     },
   );
+
+  group('señal de red (connectivity_plus)', () {
+    /// Sincronizaciones que llegaron al servidor (una lectura de movimientos
+    /// por cada pull).
+    int pulls(TestSession session) => session.server.calls
+        .where((c) => c.method == 'select' && c.table == 'movimientos')
+        .length;
+
+    /// Abre la app sin red y con el servidor caído, y espera el aviso.
+    Future<TestSession> openWithoutNetwork(
+      WidgetTester tester,
+      AppDatabase db,
+    ) async {
+      final session = TestSession(autoSync: true);
+      session.network.available = false;
+      session.server.offline = true;
+      await pumpApp(
+        tester,
+        database: db,
+        auth: FakeAuthRepository(signedInAs: testUser),
+        session: session,
+      );
+      await pumpUntil(
+        tester,
+        () => find.byType(AppOfflineIndicator).evaluate().isNotEmpty,
+      );
+      return session;
+    }
+
+    testWidgetsWithDatabase(
+      'sin red muestra el aviso de inmediato y no reintenta',
+      (tester, db) async {
+        final session = await openWithoutNetwork(tester, db);
+        session.server.offline = false;
+        // Sin red no hay reintentos con backoff (5, 10, 20, 40 s).
+        await tester.pump(const Duration(seconds: 90));
+        expect(pulls(session), 0);
+        expect(find.byType(AppOfflineIndicator), findsOneWidget);
+      },
+    );
+
+    testWidgetsWithDatabase(
+      'al volver la red sincroniza en 2 s, sin esperar el backoff',
+      (tester, db) async {
+        final session = await openWithoutNetwork(tester, db);
+        session.server.offline = false;
+        await tester.pump(const Duration(seconds: 30));
+
+        session.network.set(true);
+        await tester.pump(const Duration(seconds: 1));
+        expect(pulls(session), 0, reason: 'espera a que la red se estabilice');
+        await pumpUntil(
+          tester,
+          () => session.server.rows('movimientos').length == 68,
+          step: const Duration(milliseconds: 100),
+          maxSteps: 30,
+        );
+        await tester.pump();
+        expect(find.byType(AppOfflineIndicator), findsNothing);
+      },
+    );
+
+    testWidgetsWithDatabase(
+      'si la red parpadea, sincroniza una sola vez',
+      (tester, db) async {
+        final session = await openWithoutNetwork(tester, db);
+        session.server.offline = false;
+
+        for (var i = 0; i < 3; i++) {
+          session.network.set(true);
+          await tester.pump(const Duration(milliseconds: 500));
+          session.network.set(false);
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+        session.network.set(true);
+        await pumpUntil(
+          tester,
+          () => pulls(session) > 0,
+          step: const Duration(milliseconds: 100),
+          maxSteps: 30,
+        );
+        await tester.pump(const Duration(seconds: 10));
+        // Un pull por sincronización: hubo una sola.
+        expect(pulls(session), 1);
+      },
+    );
+
+    testWidgetsWithDatabase(
+      'con red pero sin internet el aviso se mantiene',
+      (tester, db) async {
+        final session = await openWithoutNetwork(tester, db);
+        session.network.set(true);
+        await tester.pump(const Duration(seconds: 3));
+        final container = containerOf(tester);
+        expect(container.read(syncControllerProvider).hasNetwork, isTrue);
+        expect(
+          container.read(syncControllerProvider).lastAttemptOffline,
+          isTrue,
+        );
+        expect(find.byType(AppOfflineIndicator), findsOneWidget);
+
+        // Con internet, el siguiente reintento (5 s) lo quita.
+        session.server.offline = false;
+        await pumpUntil(
+          tester,
+          () => find.byType(AppOfflineIndicator).evaluate().isEmpty,
+          step: const Duration(milliseconds: 500),
+          maxSteps: 30,
+        );
+      },
+    );
+  });
 
   test('la espera sin conexión crece de 5 a 60 s', () {
     expect(SyncController.offlineRetryDelay(1), const Duration(seconds: 5));

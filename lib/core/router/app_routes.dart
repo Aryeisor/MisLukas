@@ -18,6 +18,10 @@ abstract final class AppRoutes {
   /// Eliminar la cuenta (RF-48), a pantalla completa.
   static const String deleteAccount = '/profile/delete-account';
 
+  /// Activar el bloqueo con el bloqueo del celular (RF-46), a pantalla
+  /// completa. Se abre desde Perfil.
+  static const String appLock = '/profile/app-lock';
+
   /// Presupuestos del mes (RF-52), a pantalla completa. Se abre desde Perfil.
   static const String budgets = '/profile/budgets';
 
@@ -40,6 +44,10 @@ abstract final class AppRoutes {
   ).toString();
   static const String confirmMovement = '/movements/confirm';
 
+  /// Foto del recibo: cámara o galería, OCR y cifrado (Fase 6A). Después
+  /// abre [confirmMovement] con la foto leída en `extra`.
+  static const String receiptCapture = '/movements/new/receipt';
+
   /// Historial de movimientos (RF-22), a pantalla completa.
   static const String history = '/movements/history';
 
@@ -53,14 +61,9 @@ abstract final class AppRoutes {
   static String editMovementWith(String id) =>
       '/movements/${Uri.encodeComponent(id)}/edit';
 
-  /// Parámetro de [confirmMovement] con el método de registro: photo o manual.
+  /// Parámetro de [confirmMovement] con el método de registro: photo o
+  /// manual. Sin la foto leída en `extra`, photo abre [receiptCapture].
   static const String methodParam = 'method';
-
-  /// Ruta de confirmación con su método de registro.
-  static String confirmMovementWith(String method) => Uri(
-    path: confirmMovement,
-    queryParameters: {methodParam: method},
-  ).toString();
 
   /// Galería de componentes, solo en modo debug.
   static const String devComponents = '/dev/components';

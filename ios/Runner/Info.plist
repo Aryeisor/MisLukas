@@ -26,6 +26,12 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>MisLukas usa la cámara para tomar la foto de tus recibos y leer el valor automáticamente. Las fotos no se comparten ni se guardan en tu galería.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>MisLukas usa Face ID para desbloquear la app y proteger tus finanzas.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MisLukas abre tus fotos solo para que elijas la de un recibo y leer su valor. No ve ni guarda las demás.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -116,6 +116,18 @@ class FakeAuthRepository implements AuthRepository {
         }
       });
 
+  /// Con [AuthFailure.sessionExpired] (por [failNext]) la sesión se borra,
+  /// como hace gotrue cuando el servidor la rechaza.
+  @override
+  Future<void> resumeSession() async {
+    try {
+      await _call('resumeSession');
+    } on AuthFailureException catch (error) {
+      if (error.failure == AuthFailure.sessionExpired) _setCurrent(null);
+      rethrow;
+    }
+  }
+
   @override
   Future<void> signOut() => _call('signOut', () => _setCurrent(null));
 }

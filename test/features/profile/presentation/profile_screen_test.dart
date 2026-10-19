@@ -7,7 +7,9 @@ import 'package:mislukas/core/database/app_database.dart';
 import 'package:mislukas/core/sync/sync_controller.dart';
 import 'package:mislukas/core/widgets/dev/demo_data_actions.dart';
 import 'package:mislukas/core/widgets/widgets.dart';
+import 'package:mislukas/features/auth/domain/entities/auth_user.dart';
 import 'package:mislukas/features/auth/presentation/login_screen.dart';
+import 'package:mislukas/features/auth/presentation/sign_out_messages.dart';
 import 'package:mislukas/features/profile/data/profile_providers.dart';
 import 'package:mislukas/features/profile/domain/repositories/account_repository.dart';
 import 'package:mislukas/features/profile/presentation/delete_account_screen.dart';
@@ -15,6 +17,7 @@ import 'package:mislukas/features/profile/presentation/profile_screen.dart';
 import 'package:mislukas/features/profile/presentation/profile_view_model.dart';
 
 import '../../../helpers/fake_account_repository.dart';
+import '../../../helpers/fake_auth_repository.dart';
 import '../../../helpers/pump_screen.dart';
 import '../../../helpers/test_database.dart';
 import '../../../helpers/test_session.dart';
@@ -72,6 +75,11 @@ void main() {
     expect(find.text('Camila Rodríguez'), findsOneWidget);
     expect(find.text('camila@ejemplo.com'), findsOneWidget);
     expect(find.text('Perfil completo en una próxima versión'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.widgetWithText(AppSecondaryButton, 'Cerrar sesión'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(
       find.widgetWithText(AppSecondaryButton, 'Cerrar sesión'),
       findsOneWidget,
@@ -83,6 +91,12 @@ void main() {
     db,
   ) async {
     await pumpScreen(tester, const ProfileScreen(), database: db);
+    // Las herramientas van al final de la lista, debajo de las preferencias.
+    await tester.scrollUntilVisible(
+      find.text('Herramientas de desarrollo'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
 
     expect(find.text('Herramientas de desarrollo'), findsOneWidget);
     expect(find.text('Cargar datos de demostración'), findsOneWidget);
@@ -105,6 +119,11 @@ void main() {
       expect(find.byType(DemoDataActions), findsNothing);
       expect(find.text('Cargar datos de demostración'), findsNothing);
       expect(find.text('Borrar todos los datos'), findsNothing);
+      await tester.scrollUntilVisible(
+        find.text('Cerrar sesión'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('Cerrar sesión'), findsOneWidget);
     },
   );
@@ -152,6 +171,47 @@ void main() {
     },
   );
   group('sincronización', () {
+    testWidgetsWithDatabase(
+      'después de cerrar sesión, otra cuenta no ve la hora de la '
+      'sincronización anterior',
+      (tester, db) async {
+        final auth = FakeAuthRepository();
+        await pumpApp(tester, database: db, auth: auth, session: TestSession());
+        await loginAsDemoUser(tester);
+        await openTab(tester, 'Perfil');
+        final sync = containerOf(tester).read(syncControllerProvider.notifier);
+        await pumpUntilDone(tester, sync.syncNow());
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Datos sincronizados hace un momento'),
+          findsOneWidget,
+        );
+
+        await tapSignOut(tester);
+        await tester.tap(dialogButton('Cerrar sesión'));
+        await tester.pumpAndSettle();
+        expect(find.byType(LoginScreen), findsOneWidget);
+
+        // Entra otra cuenta en el mismo celular.
+        auth.setSession(
+          const AuthUser(
+            id: '00000000-0000-4000-8000-000000000002',
+            email: 'andres@ejemplo.com',
+            name: 'Andrés Gómez',
+          ),
+        );
+        await tester.pumpAndSettle();
+        await openTab(tester, 'Perfil');
+
+        expect(find.text('Andrés Gómez'), findsOneWidget);
+        expect(find.textContaining('Datos sincronizados'), findsNothing);
+        final state = containerOf(tester).read(syncControllerProvider);
+        expect(state.lastSyncedAt, isNull);
+        expect(state.isOffline, isFalse);
+        expect(state.rejectedCount, 0);
+      },
+    );
+
     testWidgetsWithDatabase(
       'la tarjeta muestra pendientes, éxito y sin conexión',
       (tester, db) async {

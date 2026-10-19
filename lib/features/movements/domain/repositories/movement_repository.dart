@@ -39,4 +39,10 @@ abstract interface class MovementRepository {
 
   /// Igual que [watchBetween], una sola vez.
   Future<List<Movement>> getBetween(DateTime from, DateTime to);
+
+  /// Recibo no eliminado del movimiento [movementId], o null.
+  Future<Receipt?> findReceipt(String movementId);
+
+  /// Rutas locales de las imágenes de los recibos no eliminados.
+  Future<Set<String>> activeReceiptPaths();
 }

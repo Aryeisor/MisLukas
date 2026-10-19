@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 
-/// Diálogo de confirmación con "Cancelar" y una acción. Con [destructive] la
-/// acción va en rojo ("Eliminar"). Devuelve true solo si el usuario confirma.
+/// Diálogo de confirmación con "Cancelar" (o [cancelLabel]) y una acción. Con
+/// [destructive] la acción va en rojo ("Eliminar"). Devuelve true solo si el
+/// usuario confirma.
 Future<bool> showAppConfirmDialog(
   BuildContext context, {
   required String title,
   required String message,
   required String confirmLabel,
+  String cancelLabel = 'Cancelar',
   bool destructive = false,
 }) async {
   final confirmed = await showDialog<bool>(
@@ -19,7 +21,7 @@ Future<bool> showAppConfirmDialog(
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Cancelar'),
+          child: Text(cancelLabel),
         ),
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(true),

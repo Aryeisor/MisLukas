@@ -26,6 +26,7 @@ void main() {
       'cola_sincronizacion',
       'metadatos_sync',
       'ajustes_locales',
+      'alertas_enviadas',
     });
   });
 

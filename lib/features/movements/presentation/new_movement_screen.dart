@@ -155,7 +155,9 @@ class NewMovementScreen extends ConsumerWidget {
                   : AppPrimaryButton(
                       label: 'Continuar',
                       onPressed: () => context.push(
-                        AppRoutes.confirmMovementWith(selection.method.name),
+                        selection.method == MovementEntryMethod.photo
+                            ? AppRoutes.receiptCapture
+                            : AppRoutes.confirmMovement,
                       ),
                     ),
             ),

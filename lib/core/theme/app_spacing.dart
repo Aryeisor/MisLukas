@@ -58,6 +58,16 @@ abstract final class AppSizes {
   /// Punto o cuadro de color de las leyendas.
   static const double legendDot = 10;
 
+  // Recibos
+  /// Alto de la foto en la vista previa del recibo.
+  static const double receiptPreviewHeight = 320;
+
+  /// Largo de cada esquina del marco de encuadre de la cámara.
+  static const double receiptFrameCorner = 32;
+
+  /// Grosor de las esquinas del marco de encuadre.
+  static const double receiptFrameStroke = 3;
+
   // Trazos
   static const double borderWidth = 1;
   static const double borderWidthSelected = 1.5;

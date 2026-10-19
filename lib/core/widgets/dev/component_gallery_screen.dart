@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
@@ -6,6 +7,7 @@ import '../../theme/category_style.dart';
 import '../../utils/validators.dart';
 import '../widgets.dart';
 import 'demo_data_actions.dart';
+import 'sample_receipt_image.dart';
 
 /// Galería de componentes para revisar sus estados. Solo se registra en modo debug.
 class ComponentGalleryScreen extends StatefulWidget {
@@ -21,6 +23,10 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
   CategoryKind _category = CategoryKind.mercado;
   int? _amount = 87400;
   bool _acceptedTerms = false;
+  bool _alertsEnabled = true;
+  late final Future<(Uint8List, Rect)> _sampleReceipt = drawSampleReceipt(
+    Theme.of(context).textTheme.bodyMedium ?? const TextStyle(),
+  );
 
   static const _chipCategories = [
     CategoryKind.mercado,
@@ -126,7 +132,10 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
             onChanged: (value) => setState(() => _amount = value),
           ),
           _gap,
-          Text('Valor entregado: ${_amount ?? '—'}', style: textTheme.bodySmall),
+          Text(
+            'Valor entregado: ${_amount ?? '—'}',
+            style: textTheme.bodySmall,
+          ),
 
           _section('Íconos de categoría'),
           Wrap(
@@ -172,8 +181,7 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
           SelectableOptionCard(
             icon: Icons.photo_camera_outlined,
             title: 'Foto del recibo',
-            description:
-                'La app extrae el valor y sugiere la categoría automáticamente.',
+            description: 'La app extrae el valor y sugiere la categoría automáticamente.',
             badge: 'Recomendado',
             selected: _photoSelected,
             onTap: () => setState(() => _photoSelected = true),
@@ -360,7 +368,7 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
             ],
           ),
 
-          _section('Contraseña y casilla'),
+          _section('Contraseña, casilla e interruptor'),
           const AppPasswordStrength(
             strength: PasswordStrength.medium,
             requirements: [
@@ -385,6 +393,14 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
               const AppTextSegment(' (Ley 1581 de 2012)'),
             ],
           ),
+          _gap,
+          AppSwitchTile(
+            title: 'Notificaciones de presupuesto',
+            subtitle: 'Te avisamos al 75% y al 100%',
+            icon: Icons.notifications_outlined,
+            value: _alertsEnabled,
+            onChanged: (value) => setState(() => _alertsEnabled = value),
+          ),
 
           _section('Código de verificación'),
           const AppCodeField(),
@@ -392,15 +408,22 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
           const AppCodeField(errorText: 'El código no es válido o ya venció.'),
 
           _section('Recibo'),
-          const ReceiptPreview(
-            merchant: 'ÉXITO AV. EL DORADO',
-            taxId: '890.900.608-9',
-            lines: [
-              ReceiptLine('Leche larga vida x2', 8900),
-              ReceiptLine('Pan tajado', 4500),
-              ReceiptLine('Huevos x30', 19800),
-            ],
-            total: 33200,
+          FutureBuilder(
+            future: _sampleReceipt,
+            builder: (context, snapshot) {
+              final sample = snapshot.data;
+              if (sample == null) return const ReceiptPreview.loading();
+              final (bytes, totalRow) = sample;
+              return ReceiptPreview.image(bytes, detectedArea: totalRow);
+            },
+          ),
+          _gap,
+          const ReceiptPreview.unavailable(
+            ReceiptPreviewUnavailable.notOnDevice,
+          ),
+          _gap,
+          const ReceiptPreview.unavailable(
+            ReceiptPreviewUnavailable.unreadable,
           ),
 
           _section('Snackbar'),
@@ -417,10 +440,8 @@ class _ComponentGalleryScreenState extends State<ComponentGalleryScreen> {
               Expanded(
                 child: AppSecondaryButton(
                   label: 'Error',
-                  onPressed: () => AppSnackbar.error(
-                    context,
-                    'No pudimos guardar el gasto',
-                  ),
+                  onPressed: () =>
+                      AppSnackbar.error(context, 'No pudimos guardar el gasto'),
                 ),
               ),
             ],

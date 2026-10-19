@@ -70,7 +70,29 @@ class ProfileViewModel extends Notifier<ProfileState> {
     );
   }
 
-  /// Cierra la sesión y borra los datos de este dispositivo (RF-13). Antes
+  /// Cierra la sesión conservando la sesión guardada y los datos, con
+  /// "Ingresar con huella, rostro o PIN" activo (RF-13). El router vuelve al
+  /// login.
+  Future<void> park() async {
+    if (state.isSigningOut) return;
+    state = state.copyWith(
+      isSigningOut: true,
+      signOutFailure: () => null,
+      unsyncedOnSignOut: () => null,
+    );
+    final outcome = await ref.read(accountActionsProvider).park();
+    if (!ref.mounted) return;
+    state = state.copyWith(
+      isSigningOut: false,
+      signOutFailure: () => switch (outcome) {
+        SignOutFailed(:final failure) => failure,
+        _ => null,
+      },
+    );
+  }
+
+  /// Borrado total: cierra la sesión y borra los datos de este dispositivo
+  /// (RF-13). Antes
   /// intenta enviar los cambios pendientes; si quedan, pide confirmación
   /// ([ProfileState.unsyncedOnSignOut]) salvo con [force]. El router vuelve
   /// al login.

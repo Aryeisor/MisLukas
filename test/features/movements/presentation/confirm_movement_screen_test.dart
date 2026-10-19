@@ -4,10 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mislukas/core/database/app_database.dart';
 import 'package:mislukas/core/widgets/widgets.dart';
+import 'package:mislukas/features/movements/domain/entities/receipt_suggestion.dart';
+import 'package:mislukas/features/movements/domain/repositories/receipt_image_store.dart';
 import 'package:mislukas/features/movements/presentation/confirm_movement_screen.dart';
 import 'package:mislukas/features/movements/presentation/confirm_movement_view_model.dart';
-import 'package:mislukas/features/movements/presentation/movement_entry_method.dart';
+import 'package:mislukas/features/movements/presentation/receipt/receipt_drafts.dart';
 
+import '../../../helpers/fake_receipt_services.dart';
 import '../../../helpers/pump_screen.dart';
 import '../../../helpers/test_database.dart';
 
@@ -26,38 +29,98 @@ void main() {
       tester.widget<AppChip>(find.widgetWithText(AppChip, label)).selected;
 
   group('Variante foto', () {
-    testWidgets('precarga el valor y Mercado, y permite guardar', (
-      tester,
-    ) async {
+    Future<FakeReceiptImageStore> pumpPhoto(
+      WidgetTester tester,
+      ConfirmMovementMode mode, {
+      FakeReceiptImageStore? store,
+    }) async {
+      final images = store ?? FakeReceiptImageStore();
       await pumpScreen(
         tester,
-        const ConfirmMovementScreen(
-          mode: CreateMovementMode(MovementEntryMethod.photo),
-        ),
+        ConfirmMovementScreen(mode: mode),
+        overrides: receiptServiceOverrides(store: images),
       );
+      return images;
+    }
+
+    Future<void> scrollTo(WidgetTester tester, String text) =>
+        tester.scrollUntilVisible(
+          find.text(text),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+
+    testWidgets('sugerencia completa: valor, comercio y Mercado precargados', (
+      tester,
+    ) async {
+      await pumpPhoto(tester, CreatePhotoMovementMode(testReceiptCapture()));
 
       expect(find.text('Confirma los datos'), findsOneWidget);
       expect(find.text('Recibo leído correctamente'), findsOneWidget);
-      expect(find.text('ÉXITO AV. EL DORADO'), findsOneWidget);
-      expect(find.text('Área detectada'), findsOneWidget);
-      await tester.scrollUntilVisible(
-        find.text('CATEGORÍA SUGERIDA'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
+      expect(find.byType(ReceiptPreview), findsOneWidget);
+      await scrollTo(tester, 'CATEGORÍA SUGERIDA');
       expect(find.text('VALOR DETECTADO'), findsOneWidget);
-      expect(find.text('CATEGORÍA SUGERIDA'), findsOneWidget);
+      expect(find.text('87.400'), findsOneWidget);
+      expect(find.text('COMERCIO'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Éxito'), findsOneWidget);
       expect(chipSelected(tester, 'Mercado'), isTrue);
       expect(canSave(tester), isTrue);
     });
 
-    testWidgets('sin valor el botón se deshabilita', (tester) async {
-      await pumpScreen(
+    testWidgets('sugerencia parcial: sin total, aviso y valor vacío', (
+      tester,
+    ) async {
+      await pumpPhoto(
         tester,
-        const ConfirmMovementScreen(
-          mode: CreateMovementMode(MovementEntryMethod.photo),
+        CreatePhotoMovementMode(
+          testReceiptCapture(status: ReceiptScanStatus.partial, total: null),
         ),
       );
+
+      expect(find.text('No encontramos el total'), findsOneWidget);
+      expect(find.text('Escribe el valor del gasto.'), findsOneWidget);
+      await scrollTo(tester, 'CATEGORÍA');
+      expect(find.text('VALOR DEL GASTO'), findsOneWidget);
+      expect(canSave(tester), isFalse);
+
+      // El flujo sigue de forma manual.
+      await tester.enterText(amountInput(), '15300');
+      await tester.ensureVisible(find.text('Restaurantes'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Restaurantes'));
+      await tester.pumpAndSettle();
+      expect(canSave(tester), isTrue);
+    });
+
+    testWidgets('sugerencia vacía: mensaje de error y registro manual', (
+      tester,
+    ) async {
+      await pumpPhoto(
+        tester,
+        CreatePhotoMovementMode(
+          testReceiptCapture(
+            status: ReceiptScanStatus.empty,
+            total: null,
+            merchant: null,
+          ),
+        ),
+      );
+
+      expect(find.text('No pudimos leer el recibo'), findsOneWidget);
+      expect(
+        find.text('Puedes ingresar el valor manualmente.'),
+        findsOneWidget,
+      );
+      await scrollTo(tester, 'CATEGORÍA');
+      for (final label in ['Mercado', 'Transporte', 'Otros']) {
+        expect(chipSelected(tester, label), isFalse, reason: label);
+      }
+      expect(canSave(tester), isFalse);
+    });
+
+    testWidgets('sin valor el botón se deshabilita', (tester) async {
+      await pumpPhoto(tester, CreatePhotoMovementMode(testReceiptCapture()));
+      await scrollTo(tester, 'VALOR DETECTADO');
 
       await tester.enterText(amountInput(), '');
       await tester.pump();
@@ -67,6 +130,56 @@ void main() {
       await tester.pump();
       expect(canSave(tester), isFalse);
     });
+
+    testWidgets('foto de otro celular: mensaje claro y el formulario sigue', (
+      tester,
+    ) async {
+      final capture = testReceiptCapture();
+      final store = FakeReceiptImageStore()
+        ..images[capture.localPath] = const ReceiptImageNotOnDevice();
+      await pumpPhoto(tester, CreatePhotoMovementMode(capture), store: store);
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.text('La foto solo está en el celular donde se tomó.'),
+        findsOneWidget,
+      );
+      expect(canSave(tester), isTrue);
+    });
+
+    testWidgets('foto que no se puede descifrar: mensaje claro', (
+      tester,
+    ) async {
+      final capture = testReceiptCapture();
+      final store = FakeReceiptImageStore()
+        ..images[capture.localPath] = const ReceiptImageUnreadable();
+      await pumpPhoto(tester, CreatePhotoMovementMode(capture), store: store);
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.text('No pudimos mostrar la foto del recibo.'),
+        findsOneWidget,
+      );
+      expect(canSave(tester), isTrue);
+    });
+
+    testWidgets('al salir sin guardar se borra la imagen cifrada', (
+      tester,
+    ) async {
+      final capture = testReceiptCapture();
+      final store = await pumpPhoto(tester, CreatePhotoMovementMode(capture));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ConfirmMovementScreen)),
+      );
+      expect(
+        container.read(receiptDraftsInProgressProvider),
+        contains(capture.receiptId),
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      expect(store.deleted, [capture.localPath]);
+    });
   });
 
   group('Variante manual', () {
@@ -75,9 +188,7 @@ void main() {
     ) async {
       await pumpScreen(
         tester,
-        const ConfirmMovementScreen(
-          mode: CreateMovementMode(MovementEntryMethod.manual),
-        ),
+        const ConfirmMovementScreen(mode: CreateManualMovementMode()),
       );
 
       expect(find.text('Registra tu gasto'), findsOneWidget);
@@ -101,9 +212,7 @@ void main() {
     testWidgets('requiere valor y categoría para guardar', (tester) async {
       await pumpScreen(
         tester,
-        const ConfirmMovementScreen(
-          mode: CreateMovementMode(MovementEntryMethod.manual),
-        ),
+        const ConfirmMovementScreen(mode: CreateManualMovementMode()),
       );
 
       await tester.enterText(amountInput(), '25000');
@@ -121,7 +230,7 @@ void main() {
   });
 
   group('Fecha del gasto (RF-19)', () {
-    const manual = CreateMovementMode(MovementEntryMethod.manual);
+    const manual = CreateManualMovementMode();
 
     ProviderContainer containerOf(WidgetTester tester) =>
         ProviderScope.containerOf(
@@ -200,11 +309,13 @@ void main() {
       tester,
       db,
     ) async {
-      const photo = CreateMovementMode(MovementEntryMethod.photo);
+      final photo = CreatePhotoMovementMode(testReceiptCapture());
+      final store = FakeReceiptImageStore();
       await pumpScreen(
         tester,
-        const ConfirmMovementScreen(mode: photo),
+        ConfirmMovementScreen(mode: photo),
         database: db,
+        overrides: receiptServiceOverrides(store: store),
       );
       await showDate(tester, 'Hoy, 22 de septiembre');
       await tester.tap(find.text('Hoy, 22 de septiembre'));
@@ -221,6 +332,24 @@ void main() {
       final row = await latest(tester, db);
       expect(row.origin, 'foto');
       expect(row.date, DateTime(2026, 8, 31));
+      expect(row.description, 'Éxito');
+
+      // El recibo guarda lo que leyó el OCR y su imagen cifrada.
+      final receipt = await pumpUntilDone(
+        tester,
+        (db.select(
+          db.receipts,
+        )..where((t) => t.movementId.equals(row.id))).getSingle(),
+      );
+      expect(receipt.id, 'recibo-1');
+      expect(receipt.localPath, 'recibos/recibo-1.enc');
+      expect(receipt.detectedTotal, 87400);
+      expect(receipt.detectedMerchant, 'Éxito');
+
+      // Guardado: la imagen no se borra al cerrar la pantalla.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      expect(store.deleted, isEmpty);
     });
 
     testWidgetsWithDatabase('el calendario va hasta hoy y no acepta mañana', (
@@ -375,12 +504,17 @@ void main() {
   });
 
   group('Pantalla pequeña (320 x 640, texto al 130%)', () {
-    for (final method in MovementEntryMethod.values) {
-      testWidgets('variante ${method.name} sin overflow', (tester) async {
+    final variants = <String, ConfirmMovementMode>{
+      'manual': const CreateManualMovementMode(),
+      'foto': CreatePhotoMovementMode(testReceiptCapture()),
+    };
+    for (final MapEntry(key: name, value: mode) in variants.entries) {
+      testWidgets('variante $name sin overflow', (tester) async {
         useSmallScreen(tester);
         await pumpScreen(
           tester,
-          ConfirmMovementScreen(mode: CreateMovementMode(method)),
+          ConfirmMovementScreen(mode: mode),
+          overrides: receiptServiceOverrides(),
         );
         await expectNoOverflowWhileScrolling(tester);
       });
